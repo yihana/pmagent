@@ -12,5 +12,5 @@ def get_llm():
         azure_endpoint=os.getenv("AOAI_ENDPOINT"),
         azure_deployment=os.getenv("AOAI_DEPLOY_GPT4O"),
         api_version=os.getenv("AOAI_API_VERSION"),
-        temperature=0.7,
+        # temperature=0.7,
     )

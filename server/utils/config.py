@@ -38,7 +38,7 @@ class Settings(BaseSettings):
             azure_endpoint=self.AOAI_ENDPOINT,
             azure_deployment=self.AOAI_DEPLOY_GPT4O,
             api_version=self.AOAI_API_VERSION,
-            temperature=0.7,
+            # temperature=0.7,
             streaming=True,  # 스트리밍 활성화
         )
 
