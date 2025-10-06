@@ -1,60 +1,105 @@
+# app/pages/pm_agent_dashboard.py
 import os
-import streamlit as st, requests, pandas as pd
-import datetime as dt
+import requests
+import streamlit as st
+from dotenv import load_dotenv
+from urllib.parse import urljoin, urlparse
 
+# ============================================
+# 1. 환경 변수 로드 및 API_BASE 설정
+# ============================================
+load_dotenv()
 
-def _get_api_base():
-    try:
-        # secrets가 있으면 사용
-        return st.secrets["API_BASE_URL"]
-    except Exception:
-        # 없으면 환경변수 -> 기본값
-        return os.getenv("API_BASE_URL", "http://localhost:8001/api/v1")
+def get_api_base() -> str:
+    """API Base URL을 안전하게 반환"""
+    v = os.getenv("API_BASE_URL") or "http://127.0.0.1:8001/api/v1"
+    if not urlparse(v).scheme:
+        v = "http://" + v
+    if not v.endswith("/"):
+        v += "/"
+    return v
 
-API = _get_api_base()
-API_BASE_URL = API
+API_BASE = get_api_base()
+PM_ANALYZE_URL = urljoin(API_BASE, "pm/graph/analyze")
+PM_REPORT_URL  = urljoin(API_BASE, "pm/graph/report")
 
-st.write(f"DEBUG - API_BASE_URL: {API}")
+# ============================================
+# 2. Streamlit 페이지 설정
+# ============================================
+st.set_page_config(page_title="PM Agent Dashboard", layout="wide")
+st.title("📊 PM Agent Dashboard")
 
-st.title("PM Agent Dashboard")
+with st.sidebar:
+    st.subheader("설정")
+    api_base = st.text_input("API Base URL", API_BASE)
+    if api_base != API_BASE:
+        API_BASE = api_base
+        PM_ANALYZE_URL = urljoin(API_BASE, "pm/graph/analyze")
+        PM_REPORT_URL  = urljoin(API_BASE, "pm/graph/report")
 
-st.subheader("문서 업로드 & 분석")
-col1, col2 = st.columns([1,3])
+# ============================================
+# 3. 입력 영역 (프로젝트 정보)
+# ============================================
+st.markdown("### 🔧 프로젝트 입력")
+col1, col2, col3 = st.columns(3)
 with col1:
-    project_id = st.number_input("Project ID", value=1, step=1)
-    doc_type = st.selectbox("문서 유형", ["meeting","rfp","proposal","issue"])
-    title = st.text_input("제목", value=f"{doc_type} - {dt.date.today()}")
+    project_id = st.text_input("프로젝트 ID", "1001")
 with col2:
-    content = st.text_area("내용(붙여넣기)", height=220)
+    doc_type = st.selectbox("문서 유형", ["meeting", "report", "issue"])
+with col3:
+    title = st.text_input("문서 제목", "PM 주간 회의록")
 
-if st.button("인제스트 → 분석"):
-    r = requests.post(f"{API}/pm/documents/ingest", json={
-        "project_id": project_id, "doc_type": doc_type, "title": title, "content": content
-    })
-    if r.ok:
-        doc_id = r.json()["document_id"]
-        r2 = requests.post(f"{API}/pm/documents/analyze", json={"project_id": project_id, "document_id": doc_id})
-        st.success("분석 완료")
-        st.json(r2.json())
-    else:
-        st.error(r.text)
+text_input = st.text_area("분석할 문서 내용 입력", height=250, placeholder="회의 요약이나 주요 이슈 내용을 여기에 입력하세요.")
 
-st.divider()
-st.subheader("Weekly Report & ROI")
-c1, c2, c3 = st.columns(3)
-with c1:
-    start = st.date_input("Week Start", value=dt.date.today() - dt.timedelta(days=7))
-with c2:
-    end = st.date_input("Week End", value=dt.date.today())
+# ============================================
+# 4. 버튼 액션
+# ============================================
+col_a, col_b = st.columns([1, 1])
 
-if st.button("Generate Weekly Report"):
-    r = requests.get(f"{API}/pm/report/weekly", params={
-        "project_id": project_id, "week_start": str(start), "week_end": str(end)
-    })
-    if r.ok:
-        res = r.json()
-        st.markdown(res["summary_md"])
-    else:
-        st.error(r.text)
+with col_a:
+    if st.button("📥 인제스트 → 분석 실행"):
+        if not text_input.strip():
+            st.warning("분석할 텍스트를 입력해주세요.")
+        else:
+            with st.spinner("분석 중... 잠시만 기다려주세요 ⏳"):
+                payload = {
+                    "project_id": project_id,
+                    "doc_type": doc_type,
+                    "title": title,
+                    "text": text_input,
+                }
+                try:
+                    res = requests.post(PM_ANALYZE_URL, json=payload, timeout=180)
+                    if res.status_code == 200:
+                        st.success("✅ 분석 완료!")
+                        result = res.json()
+                        st.json(result)
+                    else:
+                        st.error(f"API 오류: {res.status_code}")
+                        st.text(res.text)
+                except Exception as e:
+                    st.error(f"요청 실패: {e}")
 
-st.info("경영진용 보고서 Export(docx/pdf)은 추후 버튼 추가 예정 (python-docx/reportlab 연동)")
+with col_b:
+    if st.button("📊 분석 리포트 조회"):
+        try:
+            res = requests.get(PM_REPORT_URL, params={"project_id": project_id}, timeout=60)
+            if res.status_code == 200:
+                st.success("📑 리포트 조회 성공")
+                st.json(res.json())
+            else:
+                st.error(f"리포트 API 오류: {res.status_code}")
+                st.text(res.text)
+        except Exception as e:
+            st.error(f"리포트 요청 실패: {e}")
+
+# ============================================
+# 5. Debug Info
+# ============================================
+st.markdown("---")
+st.caption("🔍 Debug Info")
+st.code(f"""
+API_BASE = {API_BASE}
+PM_ANALYZE_URL = {PM_ANALYZE_URL}
+PM_REPORT_URL = {PM_REPORT_URL}
+""", language="python")
