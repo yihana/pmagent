@@ -1,65 +1,150 @@
+# server/db/pm_crud.py
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Iterable, Optional, Sequence
+
 from sqlalchemy.orm import Session
-from datetime import date
-from server.db import pm_models
 
-def create_meeting(db: Session, project_id: int, meeting_date: date, title: str, raw_text: str):
-    m = pm_models.Meeting(project_id=project_id, date=meeting_date, title=title, raw_text=raw_text)
-    db.add(m); db.commit(); db.refresh(m)
-    return m
+from server.db import pm_models as M
 
-def save_action_items(db: Session, meeting_id: int, items: list[dict]):
-    rows = []
-    for it in items:
-        row = pm_models.ActionItem(meeting_id=meeting_id, **it)
-        db.add(row); rows.append(row)
+
+# -------------------------
+# Project
+# -------------------------
+def get_or_create_project(db: Session, *, project_id: int, name: Optional[str] = None) -> M.Project:
+    proj = db.query(M.Project).filter(M.Project.id == project_id).one_or_none()
+    if proj:
+        return proj
+    proj = M.Project(id=project_id, name=name or f"Project-{project_id}")
+    db.add(proj)
     db.commit()
-    return rows
+    db.refresh(proj)
+    return proj
 
-def latest_actions_by_project(db: Session, project_id: int):
-    from server.db import pm_models
-    return db.query(pm_models.ActionItem)\
-        .join(pm_models.Meeting)\
-        .filter(pm_models.Meeting.project_id==project_id)\
-        .order_by(pm_models.Meeting.date.desc(), pm_models.ActionItem.id.desc())\
-        .all()
 
-def save_risks(db: Session, project_id: int, risks: list[dict], source_meeting_id: int | None=None):
-    rows = []
-    for r in risks:
-        row = pm_models.Risk(project_id=project_id, source_meeting_id=source_meeting_id, **r)
-        db.add(row); rows.append(row)
-    db.commit()
-    return rows
-
-def save_weekly_report(
+# -------------------------
+# Document
+# -------------------------
+def create_document(
     db: Session,
+    *,
     project_id: int,
-    week_start: date,
-    week_end: date,
-    summary_md: str,
-    snap: dict | None = None,
-    file_path: str | None = None,
-):
-    snap = snap or {}
-    # reporter가 대문자 키(PV/EV/AC/SPI/CPI)를 줄 수도 있고,
-    # 기존 코드가 소문자 키를 기대할 수도 있으니 둘 다 안전 처리
-    def g(d, *keys, default=0.0):
-        for k in keys:
-            if k in d:
-                return d[k]
-        return default
-
-    w = pm_models.WeeklyReport(
+    doc_type: str,
+    title: Optional[str],
+    content: str,
+    meta: Optional[dict] = None,
+) -> M.PM_Document:
+    doc = M.PM_Document(
         project_id=project_id,
-        week_start=week_start,
-        week_end=week_end,
-        summary_md=summary_md,
-        file_path=file_path,
-        pv=g(snap, 'pv', 'PV'),
-        ev=g(snap, 'ev', 'EV'),
-        ac=g(snap, 'ac', 'AC'),
-        spi=g(snap, 'spi', 'SPI'),
-        cpi=g(snap, 'cpi', 'CPI'),
+        doc_type=doc_type,
+        title=title,
+        content=content,
+        meta=meta or {},
+        created_at=datetime.utcnow(),
     )
-    db.add(w); db.commit(); db.refresh(w)
-    return w
+    db.add(doc)
+    db.flush()  # id 확보
+    return doc
+
+
+# -------------------------
+# Meeting
+# -------------------------
+def create_meeting(
+    db: Session,
+    *,
+    project_id: int,
+    date_: date,
+    title: str,
+    raw_text: str,
+    parsed_json: Optional[dict] = None,
+) -> M.Meeting:
+    meeting = M.Meeting(
+        project_id=project_id,
+        date=date_,
+        title=title,
+        raw_text=raw_text,
+        parsed_json=parsed_json,
+        created_at=datetime.utcnow(),
+    )
+    db.add(meeting)
+    db.flush()
+    return meeting
+
+
+# -------------------------
+# ActionItem
+# -------------------------
+def create_action_item(
+    db: Session,
+    *,
+    project_id: int,
+    document_id: int,
+    task: str,
+    assignee: Optional[str] = None,
+    due_date: Optional[date] = None,
+    priority: Optional[str] = None,
+    status: Optional[str] = None,
+    module: Optional[str] = None,
+    phase: Optional[str] = None,
+    evidence_span: Optional[str] = None,
+    expected_effort: Optional[str] = None,
+    expected_value: Optional[str] = None,
+    meeting_id: Optional[int] = None,
+) -> M.PM_ActionItem:
+    ai = M.PM_ActionItem(
+        project_id=project_id,
+        document_id=document_id,
+        assignee=assignee,
+        task=task,
+        due_date=due_date,
+        priority=priority,
+        status=status,
+        module=module,
+        phase=phase,
+        evidence_span=evidence_span,
+        expected_effort=expected_effort,
+        expected_value=expected_value,
+        created_at=datetime.utcnow(),
+        meeting_id=meeting_id,
+    )
+    db.add(ai)
+    return ai
+
+
+def bulk_create_action_items(
+    db: Session, *, items: Iterable[M.PM_ActionItem]
+) -> Sequence[M.PM_ActionItem]:
+    for it in items:
+        db.add(it)
+    db.flush()
+    return list(items)
+
+
+# -------------------------
+# FupItem
+# -------------------------
+def create_fup_item(
+    db: Session,
+    *,
+    project_id: int,
+    document_id: int,
+    content: str,
+    target: Optional[str] = None,
+    owner: Optional[str] = None,
+    due_date: Optional[date] = None,
+    meeting_id: Optional[int] = None,
+) -> M.FupItem:
+    f = M.FupItem(
+        project_id=project_id,
+        document_id=document_id,
+        content=content,
+        target=target,
+        owner=owner,
+        due_date=due_date,
+        created_at=datetime.utcnow(),
+        meeting_id=meeting_id,
+    )
+    db.add(f)
+    return f

@@ -84,13 +84,14 @@ def _postprocess(json_text: str, original: str) -> List[Dict[str, Any]]:
     return _fallback_rules(original)
 
 def _make_system_prompt(doc_kind: str) -> str:
+    schema_json = json.dumps(ACTION_ITEM_SCHEMA, ensure_ascii=False)
     return (
-        "You are an expert PM analyst. "
-        "Extract concrete action items from the given {kind} content. "
+        f"You are an expert PM analyst. "
+        f"Extract concrete action items from the given {doc_kind} content. "
         "Answer in strict JSON ONLY (UTF-8, no markdown fences). "
         "Use the following JSON schema:\n"
-        f"{json.dumps(ACTION_ITEM_SCHEMA, ensure_ascii=False)}"
-    ).format(kind=doc_kind)
+        f"{schema_json}"
+    )
 
 def _make_user_prompt(text: str, project_meta: Optional[Dict[str, Any]] = None) -> str:
     meta = project_meta or {}
@@ -107,7 +108,45 @@ class PM_AnalyzerAgent:
     def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.2):
         self.model_name = model_name
         self.temperature = temperature
-        self.llm = get_llm(model_name=model_name, temperature=temperature)
+
+        # 일부 모델(gpt-5-nano 계열)은 temperature 옵션을 받지 않음
+        is_nano = str(model_name).lower().startswith("gpt-5-nano")
+
+        # get_llm() 시그니처가 배포마다 달라서 안전하게 시도-폴백
+        self.llm = None
+        last_err = None
+
+        # 1) model_name + temperature
+        if not is_nano:
+            try:
+                self.llm = get_llm(model_name=model_name, temperature=temperature)
+            except TypeError as e:
+                last_err = e
+
+        # 2) temperature만
+        if self.llm is None and not is_nano:
+            try:
+                self.llm = get_llm(temperature=temperature)
+            except TypeError as e:
+                last_err = e
+
+        # 3) model_name만
+        if self.llm is None:
+            try:
+                self.llm = get_llm(model_name=model_name)
+            except TypeError as e:
+                last_err = e
+
+        # 4) 어떤 인자도 없이
+        if self.llm is None:
+            try:
+                self.llm = get_llm()
+            except TypeError as e:
+                last_err = e
+
+        if self.llm is None:
+            # 여기까지 오면 시그니처가 완전히 다른 케이스 → 에러 메시지 투명하게 반환
+            raise TypeError(f"get_llm() 호출 실패: 마지막 오류 = {last_err}")
 
     def _run(self, doc_kind: str, text: str, project_meta: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         sys_prompt = _make_system_prompt(doc_kind)

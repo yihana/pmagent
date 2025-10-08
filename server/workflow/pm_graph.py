@@ -1,232 +1,209 @@
 # server/workflow/pm_graph.py
+
+"""
+pm_graph.py
+- PM 분석 파이프라인(분석/리포트)을 단순 래퍼로 구현
+- FastAPI 라우터에서 run_pipeline("analyze", payload) 형태로 호출
+- LangGraph 없이도 동작하도록 SimpleApp 제공 (ainvoke/stream 시그니처 호환)
+"""
+
 from __future__ import annotations
-from typing import Dict, Any
-from datetime import date
-from langgraph.graph import StateGraph, END
 
-from server.workflow.state import PMState
+import asyncio
+import logging
+import re
+from dataclasses import dataclass
+from datetime import datetime, date
+from typing import Any, Dict, List, Optional
+
+from server.db.database import SessionLocal
+from server.db import pm_models
 from server.workflow.agents.pm_analyzer import PM_AnalyzerAgent
-from server.workflow.agents.pm_risk import draft_risks_from_actions   # 함수형 가정
-from server.workflow.agents.pm_report import build_weekly_md          # (md, snap) 반환
-from server.db import pm_models, pm_crud
 
-# --- 노드 구현 ---------------------------------------------------------
+log = logging.getLogger(__name__)
 
-def make_analyzer_node(model_name: str = "gpt-4o", temperature: float = 0.2):
-    analyzer = PM_AnalyzerAgent(model_name=model_name, temperature=temperature)
 
-    async def node(state: PMState) -> PMState:
-        db = state.get("db")
-        project_id = state["project_id"]
-        doc_type = state.get("doc_type", "meeting")
-        title = state.get("title", f"{doc_type}")
-        text = state.get("text", "")
+# -----------------------------
+# 유틸: 날짜/시간 변환 & DB 세션
+# -----------------------------
+def _to_date(v: Any) -> Optional[date]:
+    """문자열 'YYYY-MM-DD'나 'Due: YYYY-MM-DD' 등을 date 객체로 변환. 실패 시 None."""
+    if isinstance(v, date):
+        return v
+    if isinstance(v, str):
+        s = v.strip()
+        m = re.search(r"\d{4}-\d{2}-\d{2}", s)
+        if m:
+            try:
+                return datetime.strptime(m.group(0), "%Y-%m-%d").date()
+            except ValueError:
+                return None
+    return None
 
-        # 1) 문서 인제스트 (DB 저장)
-        doc = pm_models.PMDocument(
+
+def _utcnow() -> datetime:
+    return datetime.utcnow()
+
+
+class DBSession:
+    """with DBSession() as db: 형태로 안전하게 사용"""
+    def __enter__(self):
+        self.db = SessionLocal()
+        return self.db
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if exc:
+                self.db.rollback()
+        finally:
+            self.db.close()
+
+
+# -----------------------------
+# 간단 앱 래퍼 (LangGraph 대체)
+# -----------------------------
+@dataclass
+class SimpleApp:
+    handler: Any  # async function(payload) -> dict
+
+    async def ainvoke(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return await self.handler(payload)
+
+    # stream 호출과의 호환성을 위해 (무시되는 인자 받아도 에러 안 나게)
+    def stream(self, payload: Dict[str, Any], *args, **kwargs):
+        async def gen():
+            result = await self.ainvoke(payload)
+            yield {"final": result}
+        # 동기 제너레이터로 변환
+        loop = asyncio.get_event_loop()
+        q: List[Dict[str, Any]] = []
+
+        async def run():
+            async for ch in gen():
+                q.append(ch)
+
+        loop.run_until_complete(run())
+        for ch in q:
+            yield ch
+
+
+# -----------------------------
+# ANALYZE 핸들러
+# -----------------------------
+async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    입력 payload 예:
+    {
+      "project_id": 1001,
+      "text": "... 미팅록 ...",
+      "title": "주간 회의(10/06)",
+      "doc_type": "meeting",
+      "model_name": "gpt-5-nano",      # (선택)
+      "temperature": 0                 # (선택)
+    }
+    """
+    project_id: Optional[int] = payload.get("project_id")
+    text: str = payload.get("text") or ""
+    title: str = payload.get("title") or "Untitled"
+    doc_type: str = payload.get("doc_type") or "meeting"
+
+    if not project_id:
+        raise ValueError("project_id is required")
+    if not text.strip():
+        raise ValueError("text is empty")
+
+    # 1) 문서 저장
+    with DBSession() as db:
+        doc = pm_models.PM_Document(
             project_id=project_id,
-            doc_type=doc_type,
             title=title,
             content=text,
-            meta={}
+            doc_type=doc_type,
+            created_at=_utcnow(),
         )
-        db.add(doc); db.commit(); db.refresh(doc)
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
 
-        # 2) 분석 호출
-        if doc_type == "meeting":
-            items = analyzer.analyze_minutes(text, project_meta={"project_id": project_id})
-        elif doc_type == "rfp":
-            items = analyzer.analyze_rfp(text, project_meta={"project_id": project_id})
-        elif doc_type == "proposal":
-            items = analyzer.analyze_proposal(text, project_meta={"project_id": project_id})
-        elif doc_type == "issue":
-            items = analyzer.analyze_issue(text, project_meta={"project_id": project_id})
-        else:
-            items = analyzer.analyze_minutes(text, project_meta={"project_id": project_id})
+        # 2) 분석 실행
+        analyzer = PM_AnalyzerAgent()
+        raw = analyzer.analyze_minutes(text, project_meta={"project_id": project_id})
 
-        # 3) 액션아이템 저장
-        for it in items:
-            ai = pm_models.PMActionItem(
-                project_id=project_id, document_id=doc.id,
-                assignee=it.get("assignee"),
-                task=it.get("task","").strip(),
-                due_date=it.get("due_date"),
-                priority=it.get("priority","Medium"),
-                status=it.get("status","Open"),
-                module=it.get("module"),
-                phase=it.get("phase"),
-                evidence_span=it.get("evidence_span"),
-                expected_effort=it.get("expected_effort"),
-                expected_value=it.get("expected_value"),
-            )
-            db.add(ai)
+        # 결과 정규화: dict({"items":[...]}) 또는 list([...]) 양쪽 대응
+        items = raw.get("items") if isinstance(raw, dict) and "items" in raw else raw or []
+        if not isinstance(items, list):
+            log.warning("[ANALYZER] items is not a list. raw=%r", raw)
+            items = []
+
+        saved: List[int] = []
+        skipped: List[str] = []
+
+        for idx, item in enumerate(items, start=1):  # ← 루프 변수 이름 통일
+            try:
+                ai = pm_models.PM_ActionItem(
+                    project_id=project_id,
+                    document_id=doc.id,
+                    assignee=item.get("assignee"),
+                    task=item.get("task"),
+                    due_date=_to_date(item.get("due_date")),
+                    priority=item.get("priority"),
+                    status=item.get("status"),
+                    module=item.get("module"),
+                    phase=item.get("phase"),
+                    evidence_span=item.get("evidence_span"),
+                    expected_effort=item.get("expected_effort"),
+                    expected_value=item.get("expected_value"),
+                    created_at=_utcnow(),
+                    # meeting_id=item.get("meeting_id")  # 필요 시 사용
+                )
+                db.add(ai)
+                db.flush()   # id 채우기 위해
+                saved.append(ai.id if hasattr(ai, "id") else None)  # None일 수 있으나 로그용
+            except Exception as e:
+                msg = f"[ANALYZER] skip item #{idx} due to {e!r}"
+                log.exception(msg)
+                skipped.append(msg)
+
         db.commit()
 
         return {
+            "ok": True,
             "document_id": doc.id,
-            "action_items": items,
+            "saved_count": len([i for i in saved if i]),
+            "skipped_count": len(skipped),
+            "skipped": skipped[:5],  # 너무 길면 일부만
         }
-    return node
 
 
-async def risk_node(state: PMState) -> PMState:
-    """Analyzer가 만든 action_items를 바탕으로 라이트 리스크 태깅."""
-    db = state.get("db")
-    project_id = state["project_id"]
-
-    acts = state.get("action_items")
-    if not acts:
-        # 최근 액션에서 가져오기 (백업 루트)
-        acts_db = (
-            db.query(pm_models.PMActionItem)
-              .filter(pm_models.PMActionItem.project_id == project_id)
-              .order_by(pm_models.PMActionItem.id.desc())
-              .limit(100)
-              .all()
-        )
-        acts = [{"task": a.task} for a in acts_db]
-    else:
-        acts = [{"task": a.get("task","")} for a in acts]
-
-    risks = draft_risks_from_actions(acts)  # [{...}]
-    # 저장(옵션): pm_crud.save_risks(db, project_id, risks, source_meeting_id=None)
-    return {"risks": risks}
-
-
-async def reporter_node(state: PMState) -> PMState:
-    db = state["db"]
-    project_id = state["project_id"]
-    week_start = date.fromisoformat(state["week_start"])
-    week_end = date.fromisoformat(state["week_end"])
-
-    md, snap = build_weekly_md(db, project_id, week_start, week_end)
-
-    # 저장 (파일/DB) — 필요시 pm_crud 사용
-    pm_crud.save_weekly_report(
-        db, project_id, week_start, week_end, summary_md=md, snap=snap, file_path=None
-    )
-    return {"report_md": md, "snapshot": snap}
-
-# --- 그래프 조립 -------------------------------------------------------
-
-def create_pm_graph(mode: str, model_name: str = "gpt-4o", temperature: float = 0.2):
+# -----------------------------
+# REPORT 핸들러 (스텁)
+# -----------------------------
+async def _report_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    mode:
-      - "analyze" : analyzer만
-      - "risk"    : risk만 (최근 액션 기준)
-      - "report"  : analyzer -> risk -> reporter
+    필요 시 주간 리포트 생성 등 구현.
+    현재는 스켈레톤만 제공.
     """
-    g = StateGraph(PMState)
+    return {"ok": True, "message": "report handler not implemented yet"}
 
-    # 노드 등록
-    g.add_node("ANALYZER", make_analyzer_node(model_name, temperature))
-    g.add_node("RISK", risk_node)
-    g.add_node("REPORTER", reporter_node)
 
-    # 흐름 연결
+# -----------------------------
+# 그래프/파이프라인 생성 & 실행
+# -----------------------------
+def create_pm_graph(mode: str) -> SimpleApp:
+    mode = (mode or "").lower()
     if mode == "analyze":
-        g.set_entry_point("ANALYZER")
-        g.add_edge("ANALYZER", END)
-
-    elif mode == "risk":
-        g.set_entry_point("RISK")
-        g.add_edge("RISK", END)
-
+        return SimpleApp(handler=_analyze_handler)
     elif mode == "report":
-        g.set_entry_point("ANALYZER")
-        g.add_edge("ANALYZER", "RISK")
-        g.add_edge("RISK", "REPORTER")
-        g.add_edge("REPORTER", END)
-
+        return SimpleApp(handler=_report_handler)
     else:
-        raise ValueError(f"Unknown mode: {mode}")
+        # 기본은 analyze로
+        return SimpleApp(handler=_analyze_handler)
 
-    return g.compile()
-
-# --- 실행 헬퍼 ---------------------------------------------------------
 
 async def run_pipeline(mode: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    payload 예:
-    {
-      "db": Session,
-      "project_id": 1,
-      "doc_type": "meeting",
-      "title": "주간회의",
-      "text": "회의록 본문...",
-      "week_start": "2025-09-22",
-      "week_end": "2025-09-28",
-    }
+    라우터에서 호출:
+      res = await run_pipeline("analyze", payload)
     """
     app = create_pm_graph(mode)
-    result = await app.ainvoke(payload)
-    return result
-
-# === [ADAPTER START] expose debate_graph to external import ====================
-# 목적:
-# - 외부에서 `from server.workflow.pm_graph import debate_graph`
-#   또는 `get_debate_graph()/build_debate_graph()`로 안전하게 접근 가능하게 함
-# - 프로젝트 내부에 이미 있는 빌더 함수명이 달라도 최대한 자동으로 찾아 사용
-# - 전혀 없을 땐 디버그용 더미 그래프를 제공(스트리밍 파이프 검증용)
-
-from typing import Any, Dict
-
-_debate_graph_singleton = None  # 캐시
-
-def _find_and_build_graph():
-    """
-    pm_graph 내에 존재할 법한 빌더를 자동 탐색해 생성합니다.
-    우선순위:
-      - 전역변수 debate_graph
-      - get_debate_graph()
-      - build_debate_graph()
-      - create_debate_graph()
-      - create_graph()
-      - build_graph()
-      - make_graph()
-    없으면 디버그용 더미 그래프를 반환합니다.
-    """
-    # 1) 이미 전역에 만들어져 있으면 그대로 반환
-    g = globals().get("debate_graph")
-    if g is not None:
-        return g
-
-    # 2) 흔한 팩토리 이름들을 순서대로 탐색
-    for name in [
-        "get_debate_graph",
-        "build_debate_graph",
-        "create_debate_graph",
-        "create_graph",
-        "build_graph",
-        "make_graph",
-    ]:
-        fn = globals().get(name)
-        if callable(fn):
-            try:
-                return fn()
-            except Exception:
-                # 빌더가 있어도 내부 예외가 나면 다음 후보 시도
-                pass
-
-    # 3) 아무것도 없으면 더미 그래프(스트림 파이프/프론트 파서 검증용)
-    class _DummyGraph:
-        def stream(self, state: Dict[str, Any], stream_mode: str = "updates", config: Dict[str, Any] | None = None):
-            text = "더미 그래프입니다. pm_graph에 debate_graph 빌더를 노출하세요."
-            for ch in text.split():
-                yield {"text": ch}
-
-    return _DummyGraph()
-
-def build_debate_graph():
-    global _debate_graph_singleton
-    if _debate_graph_singleton is None:
-        _debate_graph_singleton = _find_and_build_graph()
-    return _debate_graph_singleton
-
-def get_debate_graph():
-    # 별칭
-    return build_debate_graph()
-
-# import 시점에 곧바로 접근 가능한 전역 심볼도 제공
-debate_graph = build_debate_graph()
-# === [ADAPTER END] ============================================================
+    return await app.ainvoke(payload)
