@@ -67,7 +67,7 @@ async def graph_analyze(body: AnalyzeRequest, db: Session = Depends(get_db)):
         "title": body.title or "",
         "text": body.text,
         "enable_rag": bool(body.enable_rag),
-        "db": db,                      # ✅ 추가: 그래프 state로 DB 세션 전달
+        "db": db,  # ✅ 그래프 state로 DB 세션 전달
     }
     log.info(f"[analyze] start pid={payload['project_id']} len={len(payload['text'])}")
     try:
@@ -81,7 +81,6 @@ async def graph_analyze(body: AnalyzeRequest, db: Session = Depends(get_db)):
         raise HTTPException(500, detail=f"analyze failed: {e}")
 
 
-
 @router.get("/graph/report", response_model=ReportResponse)
 async def graph_report(
     project_id: str = Query(...),
@@ -92,8 +91,7 @@ async def graph_report(
     db: Session = Depends(get_db),
 ):
     """
-    리포트 생성이 오래 걸릴 수 있으므로 서버측 타임아웃을 두고(기본 180s),
-    초과 시 504로 명확히 반환합니다.
+    주간 리포트: 기간 기본값은 이번 주(월~일).
     """
     pid = _to_int(project_id)
 
@@ -109,8 +107,8 @@ async def graph_report(
         "project_id": pid,
         "week_start": s.isoformat(),
         "week_end": e.isoformat(),
-        "db": db,   
-        "fast": fast,  # pm_graph에서 받아서 무거운 스텝 건너뛰도록(선택)
+        "db": db,
+        "fast": fast,
     }
 
     log.info(f"[report] start pid={pid} {payload['week_start']}~{payload['week_end']} fast={fast} timeout={timeout_s}s")
@@ -121,7 +119,6 @@ async def graph_report(
         return ReportResponse(status="ok", data=res)
     except asyncio.TimeoutError:
         log.warning("[report] timeout")
-        # 504: Gateway Timeout
         raise HTTPException(status_code=504, detail=f"report timed out (> {timeout_s}s)")
     except HTTPException:
         raise
