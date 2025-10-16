@@ -130,3 +130,22 @@ class FupItemRead(ORMBase):
     due_date: Optional[date]
     created_at: datetime
     meeting_id: Optional[int]
+
+# -------------------------
+# scope&schedule agent 스키마 추가
+# -------------------------
+class PMProjectBase(BaseModel):
+    name: str
+    methodology: Optional[str] = "waterfall"
+    description: Optional[str] = None
+
+class PMProjectCreate(PMProjectBase):
+    pass
+
+class PMProject(PMProjectBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True

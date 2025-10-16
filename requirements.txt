@@ -17,3 +17,9 @@ matplotlib==3.10.1
 langfuse==2.59.7
 networkx==3.4.2
 duckduckgo_search==7.5.4
+pydantic==2.8.2
+chromadb
+networkx
+SQLAlchemy>=2.0
+jinja2
+

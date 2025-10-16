@@ -1,3 +1,4 @@
+# server/db/pm_models.py
 from datetime import datetime, date
 from sqlalchemy import (
     Column,
@@ -46,7 +47,9 @@ class PM_Document(Base):
     content = Column(Text, nullable=False)
     # ⚠️ 필드명은 'doc_type' (kind/type 아님)
     doc_type = Column(String(50), nullable=False)
+    path = Column(String(1024))
     created_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     # relations
     project = relationship("Project", back_populates="documents")
@@ -56,30 +59,6 @@ class PM_Document(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-
-
-class PM_ActionItem(Base):
-    __tablename__ = "pm_action_items"
-
-    id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, index=True, nullable=False)
-    document_id = Column(Integer, ForeignKey("pm_documents.id"), nullable=True)
-
-    # ✅ 회의 연동 컬럼/관계 (스키마에 meeting_id 존재해야 함)
-    meeting_id = Column(Integer, ForeignKey("pm_meetings.id"), nullable=True)
-    meeting = relationship("Meeting", back_populates="action_items")
-
-    assignee = Column(String(100), nullable=True)
-    task = Column(Text, nullable=False)
-    due_date = Column(Date, nullable=True)
-    priority = Column(String(10), default="Medium")
-    status = Column(String(10), default="Open")
-    module = Column(String(10), nullable=True)
-    phase = Column(String(20), nullable=True)
-    evidence_span = Column(Text, nullable=True)
-    expected_effort = Column(Float, nullable=True)
-    expected_value = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Meeting(Base):
@@ -112,6 +91,30 @@ class Meeting(Base):
     )
 
 
+class PM_ActionItem(Base):
+    __tablename__ = "pm_action_items"
+
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, index=True, nullable=False)
+    document_id = Column(Integer, ForeignKey("pm_documents.id"), nullable=True)
+
+    # ✅ 회의 연동 컬럼/관계 (스키마에 meeting_id 존재해야 함)
+    meeting_id = Column(Integer, ForeignKey("pm_meetings.id"), nullable=True)
+    meeting = relationship("Meeting", back_populates="action_items")
+
+    assignee = Column(String(100), nullable=True)
+    task = Column(Text, nullable=False)
+    due_date = Column(Date, nullable=True)
+    priority = Column(String(10), default="Medium")
+    status = Column(String(10), default="Open")
+    module = Column(String(10), nullable=True)
+    phase = Column(String(20), nullable=True)
+    evidence_span = Column(Text, nullable=True)
+    expected_effort = Column(Float, nullable=True)
+    expected_value = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class FupItem(Base):
     __tablename__ = "pm_fup_items"
 
@@ -139,4 +142,34 @@ class Risk(Base):
     mitigation = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
     status = Column(String(20), default="Open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+#20251016 scope&schedule agent 추가
+class PM_Scope(Base):
+    __tablename__ = "pm_scope"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer)
+    scope_statement_md = Column(String(2000))
+    rtm_csv = Column(String(1024))
+    wbs_json = Column(String(1024))
+    full_json = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class PM_Schedule(Base):
+    __tablename__ = "pm_schedule"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer)
+    plan_csv = Column(String(1024))
+    gantt_json = Column(String(1024))
+    critical_path = Column(String(1024))
+    full_json = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class PM_Log(Base):
+    __tablename__ = "pm_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(200))
+    message = Column(Text)
+    details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

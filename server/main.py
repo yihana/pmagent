@@ -30,12 +30,12 @@ Base.metadata.create_all(bind=engine)
 
 # FastAPI 인스턴스 생성
 app = FastAPI(
-    title="Debate Arena API",
-    description="AI Debate Arena 서비스를 위한 API",
+    title="PM Agent v0.9",
+    description="AI PM Copilot 서비스를 위한 API",
     version="0.1.0",
 )
 
-print(">>> AOAI_DEPLOY_GPT4O =", os.getenv("AOAI_DEPLOY_GPT4O"))
+print(">>> AOAI_DEPLOY_GPT5O =", os.getenv("AOAI_DEPLOY_GPT4O"))
 
 # router 추가
 app.include_router(history.router)

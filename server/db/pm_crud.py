@@ -1,22 +1,20 @@
 # server/db/pm_crud.py
 from __future__ import annotations
-
 from datetime import date, datetime
 from typing import Iterable, Optional, Sequence
-
 from sqlalchemy.orm import Session
-
-from server.db import pm_models as M
+from server.db import pm_models
+from server.db.database import get_db
 
 
 # -------------------------
 # Project
 # -------------------------
-def get_or_create_project(db: Session, *, project_id: int, name: Optional[str] = None) -> M.Project:
-    proj = db.query(M.Project).filter(M.Project.id == project_id).one_or_none()
+def get_or_create_project(db: Session, *, project_id: int, name: Optional[str] = None) -> pm_models.Project:
+    proj = db.query(pm_models.Project).filter(pm_models.Project.id == project_id).one_or_none()
     if proj:
         return proj
-    proj = M.Project(id=project_id, name=name or f"Project-{project_id}")
+    proj = pm_models.Project(id=project_id, name=name or f"Project-{project_id}")
     db.add(proj)
     db.commit()
     db.refresh(proj)
@@ -34,8 +32,8 @@ def create_document(
     title: Optional[str],
     content: str,
     meta: Optional[dict] = None,
-) -> M.PM_Document:
-    doc = M.PM_Document(
+) -> pm_models.PM_Document:
+    doc = pm_models.PM_Document(
         project_id=project_id,
         doc_type=doc_type,
         title=title,
@@ -59,8 +57,8 @@ def create_meeting(
     title: str,
     raw_text: str,
     parsed_json: Optional[dict] = None,
-) -> M.Meeting:
-    meeting = M.Meeting(
+) -> pm_models.Meeting:
+    meeting = pm_models.Meeting(
         project_id=project_id,
         date=date_,
         title=title,
@@ -92,8 +90,8 @@ def create_action_item(
     expected_effort: Optional[str] = None,
     expected_value: Optional[str] = None,
     meeting_id: Optional[int] = None,
-) -> M.PM_ActionItem:
-    ai = M.PM_ActionItem(
+) -> pm_models.PM_ActionItem:
+    ai = pm_models.PM_ActionItem(
         project_id=project_id,
         document_id=document_id,
         assignee=assignee,
@@ -114,8 +112,8 @@ def create_action_item(
 
 
 def bulk_create_action_items(
-    db: Session, *, items: Iterable[M.PM_ActionItem]
-) -> Sequence[M.PM_ActionItem]:
+    db: Session, *, items: Iterable[pm_models.PM_ActionItem]
+) -> Sequence[pm_models.PM_ActionItem]:
     for it in items:
         db.add(it)
     db.flush()
@@ -135,8 +133,8 @@ def create_fup_item(
     owner: Optional[str] = None,
     due_date: Optional[date] = None,
     meeting_id: Optional[int] = None,
-) -> M.FupItem:
-    f = M.FupItem(
+) -> pm_models.FupItem:
+    f = pm_models.FupItem(
         project_id=project_id,
         document_id=document_id,
         content=content,
@@ -148,3 +146,74 @@ def create_fup_item(
     )
     db.add(f)
     return f
+
+def save_scope_result(project_name: str, scope_json: dict, methodology: str):
+    db: Session = next(get_db())
+    try:
+        project = db.query(pm_models.PMProject).filter(pm_models.PMProject.name == project_name).first()
+        if not project:
+            project = pm_models.PMProject(name=project_name, methodology=methodology)
+            db.add(project)
+            db.commit()
+            db.refresh(project)
+
+        scope = pm_models.PMScope(
+            project_id=project.id,
+            scope_statement_md=scope_json.get("scope_statement_md"),
+            rtm_csv=scope_json.get("rtm_csv"),
+            wbs_json=scope_json.get("wbs_json"),
+            full_json=scope_json
+        )
+        db.add(scope)
+        db.commit()
+        db.refresh(scope)
+        return scope
+    except Exception as e:
+        db.rollback()
+        print("[save_scope_result] Error:", e)
+        return None
+    finally:
+        db.close()
+
+def save_schedule_result(project_name: str, schedule_json: dict, methodology: str):
+    db: Session = next(get_db())
+    try:
+        project = db.query(pm_models.PMProject).filter(pm_models.PMProject.name == project_name).first()
+        if not project:
+            project = pm_models.PMProject(name=project_name, methodology=methodology)
+            db.add(project)
+            db.commit()
+            db.refresh(project)
+
+        schedule = pm_models.PMSchedule(
+            project_id=project.id,
+            plan_csv=schedule_json.get("plan_csv"),
+            gantt_json=schedule_json.get("gantt_json"),
+            critical_path=str(schedule_json.get("critical_path")),
+            full_json=schedule_json
+        )
+        db.add(schedule)
+        db.commit()
+        db.refresh(schedule)
+        return schedule
+    except Exception as e:
+        db.rollback()
+        print("[save_schedule_result] Error:", e)
+        return None
+    finally:
+        db.close()
+
+def log_event(event_type: str, message: str, details=None):
+    db: Session = next(get_db())
+    try:
+        log = pm_models.PMLog(event_type=event_type, message=message, details=details)
+        db.add(log)
+        db.commit()
+        db.refresh(log)
+        return log
+    except Exception as e:
+        db.rollback()
+        print("[log_event] Error:", e)
+        return None
+    finally:
+        db.close()

@@ -1,0 +1,1 @@
+waterfall:\n  phases:\n    - id: '1.0'\n      name: '분석'\n      default_deliverables:\n        - '요구사항 명세서'\n        - '요구사항 추적 매트릭스(RTM)'\n
