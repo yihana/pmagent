@@ -10,32 +10,56 @@ from urllib.parse import urljoin, urlparse
 load_dotenv()
 
 def get_api_base() -> str:
-    v = os.getenv("API_BASE_URL") or "http://127.0.0.1:8001/api/"
+    """API Base URL을 환경변수 또는 기본값에서 가져옴"""
+    v = os.getenv("API_BASE_URL") or "http://127.0.0.1:8001"
     if not urlparse(v).scheme:
         v = "http://" + v
-    if not v.endswith("/"):
-        v += "/"
+    # 끝의 / 제거
+    v = v.rstrip("/")
+    # /api 또는 /api/v1이 이미 포함되어 있다면 제거
+    if v.endswith("/api/v1"):
+        v = v[:-7]
+    elif v.endswith("/api"):
+        v = v[:-4]
     return v
 
 API_BASE = get_api_base()
-SCOPE_URL = urljoin(API_BASE, "v1/pm/scope/analyze")
-SCHEDULE_URL = urljoin(API_BASE, "v1/pm/schedule/analyze")
-WORKFLOW_URL = urljoin(API_BASE, "v1/pm/workflow/scope-then-schedule")
-UPLOAD_URL = urljoin(API_BASE, "v1/pm/upload/rfp")
+# pm_work.py의 라우터 prefix가 /api/v1/pm이므로 전체 경로 명시
+SCOPE_URL = f"{API_BASE}/api/v1/pm/scope/analyze"
+SCHEDULE_URL = f"{API_BASE}/api/v1/pm/schedule/analyze"
+WORKFLOW_URL = f"{API_BASE}/api/v1/pm/workflow/scope-then-schedule"
+UPLOAD_URL = f"{API_BASE}/api/v1/pm/upload/rfp"
 
 st.set_page_config(page_title="PM Agent - Scope & Schedule", layout="wide")
 st.title("🧭 PM Agent — Scope & Schedule")
 
 with st.sidebar:
     st.header("설정")
-    api_input = st.text_input("API Base URL", API_BASE, help="예) http://127.0.0.1:8001/api/")
+    api_input = st.text_input(
+        "API Base URL", 
+        API_BASE, 
+        help="서버 주소만 입력하세요. 예) http://127.0.0.1:8001"
+    )
     if api_input and api_input != API_BASE:
-        API_BASE = api_input if api_input.endswith("/") else api_input + "/"
-        SCOPE_URL = urljoin(API_BASE, "v1/pm/scope/analyze")
-        SCHEDULE_URL = urljoin(API_BASE, "v1/pm/schedule/analyze")
-        WORKFLOW_URL = urljoin(API_BASE, "v1/pm/workflow/scope-then-schedule")
-        UPLOAD_URL = urljoin(API_BASE, "v1/pm/upload/rfp")
+        # 입력값 정규화
+        api_input = api_input.rstrip("/")
+        if api_input.endswith("/api/v1"):
+            api_input = api_input[:-7]
+        elif api_input.endswith("/api"):
+            api_input = api_input[:-4]
+        
+        API_BASE = api_input
+        SCOPE_URL = f"{API_BASE}/api/v1/pm/scope/analyze"
+        SCHEDULE_URL = f"{API_BASE}/api/v1/pm/schedule/analyze"
+        WORKFLOW_URL = f"{API_BASE}/api/v1/pm/workflow/scope-then-schedule"
+        UPLOAD_URL = f"{API_BASE}/api/v1/pm/upload/rfp"
+    
     st.markdown("---")
+    st.success(f"🔗 서버: {API_BASE}")
+    with st.expander("📋 API 엔드포인트 확인"):
+        st.code(f"Upload:   {UPLOAD_URL}", language="text")
+        st.code(f"Scope:    {SCOPE_URL}", language="text")
+        st.code(f"Schedule: {SCHEDULE_URL}", language="text")
     st.caption("주의: 서버에 업로드된 RFP 파일 경로를 사용하거나\n서버경로로 복사 후 경로 입력하세요.")
 
 # --- Input: Project / Methodology ---
@@ -55,8 +79,29 @@ mode = st.radio("파일입력 모드 선택", ["서버 경로 입력 (권장)", 
 server_file_path = None
 
 if mode == "서버 경로 입력 (권장)":
-    st.markdown("**서버에 이미 올려진 RFP 파일 경로** 를 입력하세요. (예: `data/inputs/RFP/sample_rfp.pdf`)")
-    server_file_path = st.text_input("서버 파일 경로", "data/inputs/RFP/sample_rfp.pdf")
+    st.markdown("**서버에 이미 올려진 RFP 파일 경로** 를 입력하세요.")
+    st.caption("예: `data/inputs/RFP/sample_rfp.pdf` 또는 `D:/workspace/pm-agent/data/inputs/RFP/sample_rfp.pdf`")
+    
+    # 기본값을 세션에서 가져오기
+    default_path = st.session_state.get("uploaded_rfp_path", "data/inputs/RFP/sample_rfp.pdf")
+    server_file_path = st.text_input("서버 파일 경로", default_path)
+    
+    # Windows 절대경로 → 상대경로 변환 도우미
+    if server_file_path and ":" in server_file_path:  # Windows 절대경로인 경우
+        try:
+            from pathlib import Path
+            abs_path = Path(server_file_path)
+            # D:\workspace\pm-agent\data\... → data/...
+            if "data" in str(abs_path):
+                rel_path = str(abs_path).split("data")[-1].lstrip("\\/")
+                rel_path = f"data/{rel_path}".replace("\\", "/")
+                st.info(f"💡 변환된 상대경로: `{rel_path}`")
+                if st.button("📝 상대경로로 자동 입력"):
+                    st.session_state["uploaded_rfp_path"] = rel_path
+                    st.rerun()
+        except:
+            pass
+            
 else:
     st.markdown("**로컬 파일을 서버로 업로드합니다**")
     upload = st.file_uploader("RFP PDF 업로드", type=["pdf"])
@@ -64,27 +109,43 @@ else:
     if upload is not None:
         st.info(f"📄 선택된 파일: {upload.name} ({upload.size:,} bytes)")
         
-        if st.button("🔼 서버로 업로드"):
-            with st.spinner("파일 업로드 중..."):
-                try:
-                    files = {"file": (upload.name, upload.getvalue(), "application/pdf")}
-                    res = requests.post(UPLOAD_URL, files=files, timeout=60)
-                    
-                    if res.status_code == 200:
-                        data = res.json()
-                        server_file_path = data.get("path")
-                        st.success(f"✅ 업로드 완료: {server_file_path}")
-                        st.session_state["uploaded_rfp_path"] = server_file_path
-                    else:
-                        st.error(f"업로드 실패: {res.status_code}")
-                        st.text(res.text)
-                except Exception as e:
-                    st.error(f"업로드 오류: {e}")
+        col_up1, col_up2 = st.columns([1, 2])
+        with col_up1:
+            if st.button("🔼 서버로 업로드"):
+                with st.spinner("파일 업로드 중..."):
+                    try:
+                        files = {"file": (upload.name, upload.getvalue(), "application/pdf")}
+                        st.write(f"🔗 요청 URL: {UPLOAD_URL}")
+                        res = requests.post(UPLOAD_URL, files=files, timeout=60)
+                        
+                        if res.status_code == 200:
+                            data = res.json()
+                            server_file_path = data.get("path")
+                            st.success(f"✅ 업로드 완료!")
+                            st.session_state["uploaded_rfp_path"] = server_file_path
+                            st.rerun()
+                        else:
+                            st.error(f"❌ 업로드 실패: {res.status_code}")
+                            st.text(res.text)
+                            st.warning("💡 임시 해결: 파일을 수동으로 `data/inputs/RFP/` 폴더에 복사한 후 '서버 경로 입력' 모드를 사용하세요.")
+                    except Exception as e:
+                        st.error(f"업로드 오류: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
+        
+        with col_up2:
+            # 수동 경로 입력 옵션
+            manual_path = f"data/inputs/RFP/{upload.name}"
+            st.caption(f"💡 또는 파일을 서버의 `{manual_path}` 경로에 수동 복사 후 아래 버튼 클릭")
+            if st.button("📁 수동 복사 완료 (경로 저장)"):
+                st.session_state["uploaded_rfp_path"] = manual_path
+                st.success(f"✅ 경로 저장: {manual_path}")
+                st.rerun()
         
         # 이미 업로드된 경로가 있으면 사용
         if "uploaded_rfp_path" in st.session_state:
             server_file_path = st.session_state["uploaded_rfp_path"]
-            st.info(f"✅ 업로드된 파일 경로: {server_file_path}")
+            st.success(f"✅ 사용할 파일 경로: `{server_file_path}`")
 
 st.markdown("---")
 
@@ -114,6 +175,7 @@ with colA:
                 "options": {"chunk_size": int(chunk_size), "overlap": int(overlap)}
             }
             st.info(f"요청: {SCOPE_URL}")
+            st.json(payload)
             with st.spinner("Scope Agent 실행 중..."):
                 try:
                     res = requests.post(SCOPE_URL, json=payload, timeout=180)
@@ -136,6 +198,8 @@ with colA:
                         st.text(res.text)
                 except Exception as e:
                     st.error(f"요청 실패: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
 # Schedule
 with colB:
