@@ -18,9 +18,10 @@ def get_api_base() -> str:
     return v
 
 API_BASE = get_api_base()
-SCOPE_URL = urljoin(API_BASE, "scope/run")
-SCHEDULE_URL = urljoin(API_BASE, "schedule/run")
-WORKFLOW_URL = urljoin(API_BASE, "workflow/scope-then-schedule")
+SCOPE_URL = urljoin(API_BASE, "v1/pm/scope/analyze")
+SCHEDULE_URL = urljoin(API_BASE, "v1/pm/schedule/analyze")
+WORKFLOW_URL = urljoin(API_BASE, "v1/pm/workflow/scope-then-schedule")
+UPLOAD_URL = urljoin(API_BASE, "v1/pm/upload/rfp")
 
 st.set_page_config(page_title="PM Agent - Scope & Schedule", layout="wide")
 st.title("🧭 PM Agent — Scope & Schedule")
@@ -30,9 +31,10 @@ with st.sidebar:
     api_input = st.text_input("API Base URL", API_BASE, help="예) http://127.0.0.1:8001/api/")
     if api_input and api_input != API_BASE:
         API_BASE = api_input if api_input.endswith("/") else api_input + "/"
-        SCOPE_URL = urljoin(API_BASE, "scope/run")
-        SCHEDULE_URL = urljoin(API_BASE, "schedule/run")
-        WORKFLOW_URL = urljoin(API_BASE, "workflow/scope-then-schedule")
+        SCOPE_URL = urljoin(API_BASE, "v1/pm/scope/analyze")
+        SCHEDULE_URL = urljoin(API_BASE, "v1/pm/schedule/analyze")
+        WORKFLOW_URL = urljoin(API_BASE, "v1/pm/workflow/scope-then-schedule")
+        UPLOAD_URL = urljoin(API_BASE, "v1/pm/upload/rfp")
     st.markdown("---")
     st.caption("주의: 서버에 업로드된 RFP 파일 경로를 사용하거나\n서버경로로 복사 후 경로 입력하세요.")
 
@@ -48,24 +50,41 @@ with col3:
     overlap = st.number_input("Overlap", value=100, step=10)
 
 st.markdown("### RFP 입력 (2가지 모드)")
-mode = st.radio("파일입력 모드 선택", ["서버 경로 입력 (권장)", "파일 업로드 (로컬 → 서버 미지원: 안내용)"])
+mode = st.radio("파일입력 모드 선택", ["서버 경로 입력 (권장)", "파일 업로드 (로컬 → 서버)"])
 
 server_file_path = None
+
 if mode == "서버 경로 입력 (권장)":
-    st.markdown("**서버에 이미 올려진 RFP 파일 경로** 를 입력하세요. (예: `data/inputs/RFP/sample_rfp.pdf`)\n\n서버와 동일 환경에서 Streamlit을 돌리는 경우 상대경로로 지정하면 됩니다.")
+    st.markdown("**서버에 이미 올려진 RFP 파일 경로** 를 입력하세요. (예: `data/inputs/RFP/sample_rfp.pdf`)")
     server_file_path = st.text_input("서버 파일 경로", "data/inputs/RFP/sample_rfp.pdf")
 else:
-    st.markdown("로컬 파일 업로드 버튼(로컬 업로드는 백엔드에 업로드 엔드포인트가 없으면 동작하지 않습니다).")
-    upload = st.file_uploader("RFP PDF 업로드 (테스트용)", type=["pdf"])
+    st.markdown("**로컬 파일을 서버로 업로드합니다**")
+    upload = st.file_uploader("RFP PDF 업로드", type=["pdf"])
+    
     if upload is not None:
-        # save to a temp file path on Streamlit server (only works if Streamlit runs where server can access)
-        tmp_dir = os.getenv("STREAMLIT_UPLOAD_DIR", "data/inputs/RFP")
-        os.makedirs(tmp_dir, exist_ok=True)
-        dest_path = os.path.join(tmp_dir, upload.name)
-        with open(dest_path, "wb") as f:
-            f.write(upload.getbuffer())
-        st.success(f"로컬 파일을 서버 경로로 저장했습니다: {dest_path}")
-        server_file_path = dest_path
+        st.info(f"📄 선택된 파일: {upload.name} ({upload.size:,} bytes)")
+        
+        if st.button("🔼 서버로 업로드"):
+            with st.spinner("파일 업로드 중..."):
+                try:
+                    files = {"file": (upload.name, upload.getvalue(), "application/pdf")}
+                    res = requests.post(UPLOAD_URL, files=files, timeout=60)
+                    
+                    if res.status_code == 200:
+                        data = res.json()
+                        server_file_path = data.get("path")
+                        st.success(f"✅ 업로드 완료: {server_file_path}")
+                        st.session_state["uploaded_rfp_path"] = server_file_path
+                    else:
+                        st.error(f"업로드 실패: {res.status_code}")
+                        st.text(res.text)
+                except Exception as e:
+                    st.error(f"업로드 오류: {e}")
+        
+        # 이미 업로드된 경로가 있으면 사용
+        if "uploaded_rfp_path" in st.session_state:
+            server_file_path = st.session_state["uploaded_rfp_path"]
+            st.info(f"✅ 업로드된 파일 경로: {server_file_path}")
 
 st.markdown("---")
 
@@ -105,7 +124,13 @@ with colA:
                             st.markdown("**생성된 파일**")
                             st.write(f"- Scope Statement: `{data.get('scope_statement_md')}`")
                             st.write(f"- RTM: `{data.get('rtm_csv')}`")
-                            st.write(f"- WBS JSON: `{data.get('wbs_json')}`")
+                            wbs_path = data.get('wbs_json')
+                            st.write(f"- WBS JSON: `{wbs_path}`")
+                            
+                            # WBS 경로를 세션에 저장 (Schedule에서 사용)
+                            if wbs_path:
+                                st.session_state["wbs_json_path"] = wbs_path
+                                st.success(f"✅ WBS 경로가 저장되었습니다: {wbs_path}")
                     else:
                         st.error(f"Scope API 오류: {res.status_code}")
                         st.text(res.text)
@@ -114,15 +139,15 @@ with colA:
 
 # Schedule
 with colB:
-    wbs_path_input = st.text_input("Schedule 입력 WBS JSON 경로 (서버)", value="data/outputs/scope/wbs_structure.json")
+    # WBS 경로 자동 채우기
+    default_wbs = st.session_state.get("wbs_json_path", "data/outputs/scope/wbs_structure.json")
+    wbs_path_input = st.text_input("Schedule 입력 WBS JSON 경로 (서버)", value=default_wbs)
+    
     calendar_start = st.date_input("시작일", value=None)
     holidays_raw = st.text_input("휴일 (콤마로 구분, YYYY-MM-DD 형식)", value="")
     sprint_len = st.number_input("Sprint 길이(주)", min_value=1, value=2)
 
     if st.button("🗓️ Schedule 생성 실행"):
-        if not os.path.exists(wbs_path_input) and not wbs_path_input.startswith("/"):
-            # still allow user to call; the backend will fail if path invalid
-            st.warning("입력한 WBS 경로가 현재 Streamlit 서버 경로에 없습니다. 서버에 해당 파일이 있는지 확인하세요.")
         calendar = {
             "start_date": calendar_start.isoformat() if calendar_start else "2025-11-03",
             "work_week": [1,2,3,4,5],
@@ -156,7 +181,9 @@ with colB:
 
 # Workflow (Scope -> Schedule)
 with colC:
-    if st.button("🔁 전체 워크플로우 실행 (Scope -> Schedule)"):
+    workflow_start = st.date_input("Workflow 시작일", value=None, key="workflow_date")
+    
+    if st.button("🔄 전체 워크플로우 실행 (Scope -> Schedule)"):
         if not server_file_path or not server_file_path.strip():
             st.error("서버 파일 경로를 입력하거나 업로드 해주세요.")
         else:
@@ -170,7 +197,11 @@ with colC:
                 "scope": scope_payload,
                 "schedule": {
                     "methodology": methodology,
-                    "calendar": {"start_date": st.session_state.get("workflow_start", None) or "2025-11-03", "work_week":[1,2,3,4,5], "holidays":[]},
+                    "calendar": {
+                        "start_date": workflow_start.isoformat() if workflow_start else "2025-11-03",
+                        "work_week": [1,2,3,4,5],
+                        "holidays": []
+                    },
                     "sprint_length_weeks": int(sprint_len)
                 }
             }
@@ -183,7 +214,12 @@ with colC:
                         data = _show_response_json(res)
                         if data:
                             st.markdown("**Scope / Schedule 생성 결과**")
-                            st.write(data)
+                            if data.get("scope"):
+                                st.write("**Scope 결과:**")
+                                st.json(data["scope"])
+                            if data.get("schedule"):
+                                st.write("**Schedule 결과:**")
+                                st.json(data["schedule"])
                     else:
                         st.error(f"Workflow API 오류: {res.status_code}")
                         st.text(res.text)
@@ -191,4 +227,4 @@ with colC:
                     st.error(f"요청 실패: {e}")
 
 st.markdown("---")
-st.caption("Tip: 서버 경로로 파일이 없다면, 서버 터미널에서 RFP 파일을 data/inputs/RFP/ 에 복사한 뒤 경로를 입력하세요.")
+st.caption("Tip: 로컬 파일을 업로드하면 서버의 data/inputs/RFP/ 경로에 저장됩니다.")

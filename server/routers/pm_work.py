@@ -1,11 +1,17 @@
 # server/routers/pm_work.py
 from typing import Dict, Any, Optional, List
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field
 import traceback
+import shutil
+from pathlib import Path
 from server.workflow.pm_graph import run_pipeline
 
 router = APIRouter(prefix="/api/v1/pm", tags=["pm"])
+
+# 파일 업로드 디렉토리 설정
+UPLOAD_DIR = Path("data/inputs/RFP")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # ===== 공용 모델 =====
 class AnalyzeRequest(BaseModel):
@@ -83,6 +89,38 @@ class WorkflowResponse(BaseModel):
     scope: Optional[Dict[str, Any]] = None
     schedule: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
+
+# -----------------------
+# 신규: 파일 업로드 엔드포인트
+# -----------------------
+@router.post("/upload/rfp")
+async def upload_rfp(file: UploadFile = File(...)):
+    """
+    RFP PDF 파일 업로드
+    - 클라이언트(Streamlit)에서 파일을 업로드받아 서버 경로에 저장
+    - 저장된 파일의 서버 경로를 반환하여 Scope/Schedule Agent에서 사용
+    """
+    try:
+        # 파일 확장자 검증
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="PDF 파일만 업로드 가능합니다.")
+        
+        # 파일 저장
+        file_path = UPLOAD_DIR / file.filename
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return {
+            "status": "ok",
+            "filename": file.filename,
+            "path": str(file_path),
+            "message": f"파일이 업로드되었습니다: {file_path}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"파일 업로드 실패: {str(e)}")
 
 # -----------------------
 # 기존: 그래프 분석 / 리포트

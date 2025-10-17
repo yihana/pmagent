@@ -1,3 +1,4 @@
+# server/utils/config.py  (덮어쓰기할 파일)
 import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,21 +16,29 @@ class Settings(BaseSettings):
     AOAI_EMBEDDING_DEPLOYMENT: str
     AOAI_API_VERSION: str
 
-    # Langfuse 설정
-    LANGFUSE_PUBLIC_KEY: str
-    LANGFUSE_SECRET_KEY: str
-    LANGFUSE_HOST: str
+    # Langfuse 설정 (옵션)
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_HOST: str | None = None
 
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Cashflow API"
 
-    API_BASE_URL: str
+    API_BASE_URL: str | None = None
 
-    # SQLite 데이터베이스 설정
+    # 기존 SQLite 데이터베이스 설정 (하위호환)
     DB_PATH: str = "history.db"
     SQLALCHEMY_DATABASE_URI: str = f"sqlite:///./{DB_PATH}"
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    # 새로 추가된 (현재 에러를 일으킨) 설정들
+    # Vector store persist dir
+    VECTOR_DIR: str = "vectorstore/scope"
+
+    # Standard DATABASE_URL (예: sqlite:///./pm_agent.db)
+#    DATABASE_URL: str = "sqlite:///./pm_agent.db" 수정할것!!!
+    DATABASE_URL: str = "sqlite:///./history.db"
+    # Pydantic 설정: .env 읽기, 대/소문자 구분, extra 허용(안전)
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     def get_llm(self):
         """Azure OpenAI LLM 인스턴스를 반환합니다."""

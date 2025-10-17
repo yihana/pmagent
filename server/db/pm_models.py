@@ -45,9 +45,8 @@ class PM_Document(Base):
     project_id = Column(Integer, ForeignKey("pm_projects.id"), nullable=False)
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    # ⚠️ 필드명은 'doc_type' (kind/type 아님)
+    path = Column(String(1024), nullable=True)  
     doc_type = Column(String(50), nullable=False)
-    path = Column(String(1024))
     created_at = Column(DateTime, default=datetime.utcnow)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
