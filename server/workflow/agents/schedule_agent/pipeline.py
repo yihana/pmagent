@@ -1,63 +1,73 @@
-import os, json, datetime, csv
-import networkx as nx
-from langchain_openai import ChatOpenAI
-from .prompts import DURATION_DEP_PROMPT
-from server.core.logging import get_logger
+import json, asyncio
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-log = get_logger("ScheduleAgent")
+def _find_root(start: Path) -> Path:
+    for p in start.parents:
+        if (p / "data").exists():
+            return p
+    return start.parents[4]
 
 class ScheduleAgent:
-    def __init__(self, model="gpt-4o-mini"):
-        self.llm = ChatOpenAI(model=model, temperature=0)
+    """
+    input: wbs_json (path or raw json)
+    output: outputs/schedule/{project_id}/timeline.json
+    """
+    def __init__(self, data_dir: Optional[str] = None):
+        here = Path(__file__).resolve()
+        root = _find_root(here)
+        self.DATA_DIR = Path(data_dir) if data_dir else (root / "data")
+        self.OUT_DIR = self.DATA_DIR / "outputs" / "schedule"
+        self.OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    def estimate(self, wbs_json_path, methodology):
-        wbs = json.load(open(wbs_json_path, encoding="utf-8"))
-        prompt = DURATION_DEP_PROMPT.format(wbs_json=json.dumps(wbs["wbs"], ensure_ascii=False),
-                                            methodology=methodology)
-        plan = self.llm.invoke(prompt).content
-        return json.loads(plan)
+    async def pipeline(self, payload: Any) -> Dict[str, Any]:
+        # 방어적 표준화
+        if not isinstance(payload, dict):
+            if hasattr(payload, "model_dump"):
+                payload = payload.model_dump()
+            elif hasattr(payload, "dict"):
+                payload = payload.dict()
+            else:
+                payload = {}
 
-    def _add_days(self, start: datetime.date, days: int):
-        return start + datetime.timedelta(days=days)
+        project_id = payload.get("project_id", "default")
+        wbs_json = payload.get("wbs_json")
+        wbs = await self._load_wbs(wbs_json)
+        timeline = await self._build_timeline(wbs)
+        out = await self._write_timeline(project_id, timeline)
+        return {"project_id": project_id, "timeline_path": str(out), "tasks": len(timeline)}
 
-    def build_dag_and_schedule(self, estimates, calendar, sprint_weeks=None):
-        G = nx.DiGraph()
-        for t in estimates:
-            G.add_node(t["id"], duration=int(t.get("duration_days",1)))
-            for p in t.get("predecessors", []):
-                G.add_edge(p, t["id"])
+    async def _load_wbs(self, src: Optional[str]) -> Dict[str, Any]:
+        if not src:
+            return {"nodes": []}
+        p = Path(src)
+        if p.exists():
+            return json.loads(p.read_text(encoding="utf-8"))
+        try:
+            return json.loads(src)
+        except Exception:
+            return {"nodes": []}
 
-        critical_path = nx.dag_longest_path(G)
+    async def _build_timeline(self, wbs: Dict[str, Any]) -> List[Dict[str, Any]]:
+        tasks: List[Dict[str, Any]] = []
+        day = 0
+        def dfs(node: Dict[str, Any]):
+            nonlocal day
+            if node.get("children"):
+                for c in node["children"]:
+                    dfs(c)
+            else:
+                day += 1
+                tasks.append({"id": node.get("id"), "name": node.get("name"),
+                              "start_offset_days": day, "duration_days": 1})
+        for root in wbs.get("nodes", []):
+            dfs(root)
+        await asyncio.sleep(0)
+        return tasks
 
-        start = datetime.date.fromisoformat(calendar["start_date"])
-        topo = list(nx.topological_sort(G))
-        start_dates, finish_dates = {}, {}
-
-        for node in topo:
-            preds = list(G.predecessors(node))
-            es = start if not preds else max(finish_dates[p] for p in preds)
-            dur = G.nodes[node]["duration"]
-            fs = self._add_days(es, dur)
-            start_dates[node], finish_dates[node] = es, fs
-
-        rows = [['TaskID','Start','Finish']]
-        for node in topo:
-            rows.append([node, str(start_dates[node]), str(finish_dates[node])])
-
-        os.makedirs('data/outputs/schedule/logs', exist_ok=True)
-        with open('data/outputs/schedule/logs/execution.jsonl','a',encoding='utf-8') as f:
-            f.write(json.dumps({'ts':datetime.datetime.utcnow().isoformat(), 'agent':'schedule','meta':{'critical_path':critical_path}}, ensure_ascii=False)+'\n')
-
-        return rows, {'critical_path': critical_path}
-
-    def write_outputs(self, rows, meta, outdir='data/outputs/schedule'):
-        os.makedirs(outdir, exist_ok=True)
-        with open(f"{outdir}/schedule_plan.csv","w",newline="",encoding="utf-8") as f:
-            csv.writer(f).writerows(rows)
-        json.dump({'critical_path': meta['critical_path']}, open(f"{outdir}/gantt.json","w",encoding="utf-8"), ensure_ascii=False, indent=2)
-        return {
-          'plan_csv': f"{outdir}/schedule_plan.csv",
-          'gantt_json': f"{outdir}/gantt.json",
-          'critical_path': meta['critical_path'],
-          'weekly_reports_dir': f"{outdir}/reports"
-        }
+    async def _write_timeline(self, project_id: Any, timeline: List[Dict[str, Any]]) -> Path:
+        proj = self.OUT_DIR / str(project_id)
+        proj.mkdir(parents=True, exist_ok=True)
+        out = proj / "timeline.json"
+        out.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
+        return out

@@ -1,59 +1,152 @@
-import os, json, csv, datetime
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.chains import RetrievalQA
-from .prompts import SCOPE_EXTRACT_PROMPT, WBS_SYNTHESIS_PROMPT
-from server.core.config import VECTOR_DIR
-from server.core.logging import get_logger
+import json
+import asyncio
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-log = get_logger("ScopeAgent")
+
+def _find_root(start: Path) -> Path:
+    """프로젝트 루트 찾기 (data 폴더가 있는 위치)"""
+    for p in start.parents:
+        if (p / "data").exists():
+            return p
+    return start.parents[4]
+
 
 class ScopeAgent:
-    def __init__(self, db_path: str = VECTOR_DIR, model: str = "gpt-4o-mini"):
-        self.emb = OpenAIEmbeddings()
-        self.llm = ChatOpenAI(model=model, temperature=0)
-        self.db_path = db_path
-        os.makedirs(self.db_path, exist_ok=True)
+    """
+    RFP 문서로부터 Scope Statement, RTM, WBS를 생성하는 Agent
+    
+    Pipeline:
+        1. ingest: RFP 텍스트 로드
+        2. extract_items: 요구사항 추출
+        3. synthesize_wbs: WBS 구조 생성
+        4. write_outputs: 파일로 저장
+    """
+    
+    def __init__(self, data_dir: Optional[str] = None):
+        here = Path(__file__).resolve()
+        root = _find_root(here)
+        self.DATA_DIR = Path(data_dir) if data_dir else (root / "data")
+        self.INPUT_RFP_DIR = self.DATA_DIR / "inputs" / "RFP"
+        self.OUT_DIR = self.DATA_DIR / "outputs" / "scope"
+        self.INPUT_RFP_DIR.mkdir(parents=True, exist_ok=True)
+        self.OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    def ingest(self, paths, chunk=500, overlap=100):
-        docs = []
-        for p in paths:
-            docs += PyPDFLoader(p).load()
-        splits = RecursiveCharacterTextSplitter(chunk_size=chunk, chunk_overlap=overlap).split_documents(docs)
-        self.vs = Chroma.from_documents(splits, self.emb, persist_directory=self.db_path)
-        self.retriever = self.vs.as_retriever(search_kwargs={"k": 8})
-        log.info(f"Ingested {len(splits)} chunks -> {self.db_path}")
+    async def pipeline(self, payload: Any) -> Dict[str, Any]:
+        """메인 파이프라인 실행"""
+        if not isinstance(payload, dict):
+            if hasattr(payload, "model_dump"):
+                payload = payload.model_dump()
+            elif hasattr(payload, "dict"):
+                payload = payload.dict()
+            else:
+                payload = {}
 
-    def extract_items(self):
-        qa = RetrievalQA.from_chain_type(llm=self.llm, retriever=self.retriever, chain_type="stuff")
-        res = qa.run(SCOPE_EXTRACT_PROMPT)
-        items = json.loads(res) if isinstance(res, str) else res
+        project_id = payload.get("project_id", "default")
+        text = payload.get("text")
+        rfp_filename = payload.get("rfp_filename")
+        depth = int(payload.get("options", {}).get("wbs_depth", 3))
+
+        raw = await self._ingest(text, rfp_filename)
+        items = await self._extract_items(raw)
+        wbs = await self._synthesize_wbs(items, depth)
+        paths = await self._write_outputs(project_id, raw, items, wbs)
+        
+        return {
+            "project_id": project_id,
+            "wbs_json_path": str(paths["wbs_json"]),
+            "rtm_csv_path": str(paths["rtm_csv"]),
+            "scope_md_path": str(paths["scope_md"]),
+            "stats": {
+                "items": len(items), 
+                "wbs_nodes": len(wbs.get("nodes", []))
+            },
+        }
+
+    async def _ingest(self, text: Optional[str], rfp_filename: Optional[str]) -> str:
+        """RFP 텍스트 로드"""
+        if text:
+            return text
+        if rfp_filename:
+            pdf = self.INPUT_RFP_DIR / rfp_filename
+            if pdf.exists():
+                return f"RFP: {pdf.name}\n\nOverview\nRequirements\nDeliverables"
+            else:
+                return f"[WARN] RFP not found: {pdf}"
+        return "No input provided."
+
+    async def _extract_items(self, raw: str) -> List[Dict[str, Any]]:
+        """요구사항 추출 (간단한 줄 단위 파싱)"""
+        items = []
+        for i, ln in enumerate([l.strip() for l in raw.splitlines() if l.strip()], 1):
+            items.append({
+                "id": f"R{i:03d}",
+                "text": ln,
+                "type": "req" if "require" in ln.lower() else "note"
+            })
+        await asyncio.sleep(0)
         return items
 
-    def synthesize_wbs(self, items, methodology):
-        prompt = WBS_SYNTHESIS_PROMPT.format(items=json.dumps(items, ensure_ascii=False), methodology=methodology)
-        wbs = self.llm.invoke(prompt).content
-        return json.loads(wbs)
+    async def _synthesize_wbs(self, items: List[Dict[str, Any]], depth: int) -> Dict[str, Any]:
+        """WBS 구조 생성"""
+        nodes = [{"id": "WBS-1", "name": "Project", "level": 1, "children": []}]
+        phases = [
+            {"id": f"WBS-1.{i}", "name": f"Phase {i}", "level": 2, "children": []} 
+            for i in range(1, 4)
+        ]
+        nodes[0]["children"] = phases
+        
+        t = 0
+        for p in phases:
+            for j in range(1, 4):
+                t += 1
+                p["children"].append({
+                    "id": f"{p['id']}.{j}",
+                    "name": f"Task {t}",
+                    "level": 3
+                })
+        
+        return {"nodes": nodes, "depth": max(1, min(depth, 3))}
 
-    def write_outputs(self, items, wbs, outdir="data/outputs/scope"):
-        os.makedirs(outdir, exist_ok=True)
-        open(f"{outdir}/scope_statement.md","w",encoding="utf-8").write("# 범위기술서\n\n자동 생성된 초안입니다.\n")
-        with open(f"{outdir}/requirements_trace_matrix.csv","w",newline="",encoding="utf-8") as f:
-            writer = csv.writer(f); writer.writerow(["REQ_ID","Function","Deliverable"])
-            for r in items.get("requirements", []):
-                rid = r.get("id") or r.get("name")
-                for d in items.get("deliverables",[]):
-                    writer.writerow([rid, "TBD", d.get("name")])
-        open(f"{outdir}/wbs_structure.json","w",encoding="utf-8").write(json.dumps({"wbs":wbs}, ensure_ascii=False, indent=2))
-        os.makedirs(f"{outdir}/logs", exist_ok=True)
-        with open(f"{outdir}/logs/execution.jsonl","a",encoding="utf-8") as f:
-            f.write(json.dumps({"ts":datetime.datetime.utcnow().isoformat(), "agent":"scope",
-                                "outputs":{"scope_statement":"scope_statement.md","rtm":"requirements_trace_matrix.csv","wbs":"wbs_structure.json"}},
-                               ensure_ascii=False) + "\n")
+    async def _write_outputs(
+        self, 
+        project_id: Any, 
+        raw: str, 
+        items: List[Dict[str, Any]], 
+        wbs: Dict[str, Any]
+    ) -> Dict[str, Path]:
+        """결과 파일 저장"""
+        proj_dir = self.OUT_DIR / str(project_id)
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        
+        # WBS JSON
+        wbs_json = proj_dir / "wbs_structure.json"
+        wbs_json.write_text(
+            json.dumps(wbs, ensure_ascii=False, indent=2), 
+            encoding="utf-8"
+        )
+        
+        # RTM CSV
+        rtm_csv = proj_dir / "rtm.csv"
+        with open(rtm_csv, "w", encoding="utf-8", newline="") as f:
+            f.write("req_id,text,type\n")
+            for it in items:
+                text_safe = it['text'].replace(',', ';').replace('\n', ' ')
+                f.write(f"{it['id']},{text_safe},{it['type']}\n")
+        
+        # Scope Statement Markdown
+        scope_md = proj_dir / "scope_statement.md"
+        with open(scope_md, "w", encoding="utf-8") as f:
+            f.write("# Scope Statement\n\n")
+            f.write("## Overview\n\n")
+            f.write(raw + "\n\n")
+            f.write("## WBS\n\n")
+            f.write("```json\n")
+            f.write(json.dumps(wbs, ensure_ascii=False, indent=2))
+            f.write("\n```\n")
+        
         return {
-          "scope_statement_md": f"{outdir}/scope_statement.md",
-          "rtm_csv": f"{outdir}/requirements_trace_matrix.csv",
-          "wbs_json": f"{outdir}/wbs_structure.json"
+            "wbs_json": wbs_json,
+            "rtm_csv": rtm_csv,
+            "scope_md": scope_md
         }

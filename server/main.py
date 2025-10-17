@@ -32,7 +32,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="PM Agent v0.9",
     description="AI PM Copilot 서비스를 위한 API",
-    version="0.1.0",
+    version="0.4.1",
 )
 
 print(">>> AOAI_DEPLOY_GPT5O =", os.getenv("AOAI_DEPLOY_GPT4O"))
