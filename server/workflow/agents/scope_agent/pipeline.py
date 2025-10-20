@@ -42,9 +42,24 @@ class ScopeAgent:
             else:
                 payload = {}
 
-        project_id = payload.get("project_id", "default")
+        # project_id 추출 (여러 소스에서)
+        project_id = payload.get("project_id")
+        if not project_id:
+            project_id = payload.get("project_name", "default")
+        
+        # documents 배열에서 첫 번째 문서 경로 추출
+        documents = payload.get("documents", [])
         text = payload.get("text")
-        rfp_filename = payload.get("rfp_filename")
+        rfp_filename = None
+        
+        if documents and len(documents) > 0:
+            # documents[0].path를 rfp_filename으로 사용
+            first_doc = documents[0]
+            if isinstance(first_doc, dict):
+                rfp_filename = first_doc.get("path")
+            else:
+                rfp_filename = getattr(first_doc, "path", None)
+        
         depth = int(payload.get("options", {}).get("wbs_depth", 3))
 
         raw = await self._ingest(text, rfp_filename)
