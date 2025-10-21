@@ -130,10 +130,66 @@ async def graph_analyze(payload: AnalyzeRequest):
     """
     기존 엔드포인트 유지: 그래프 기반 분석 호출
     run_pipeline(kind="analyze", payload=payload.model_dump())
+    
+    응답에 저장된 액션 아이템 수 포함
     """
     try:
-        result = await run_pipeline(kind="analyze", payload=payload)
-        return AnalyzeResponse(status="ok", data=result)
+        result = await run_pipeline(kind="analyze", payload=payload.model_dump())
+        
+        # ✅ 저장 직후 바로 액션 아이템 목록 조회
+        project_id = result.get("project_id")
+        saved_count = result.get("saved_action_items", 0)
+        
+        # DB에서 방금 저장된 액션 아이템 조회
+        action_items_list = []
+        if saved_count > 0 and project_id:
+            try:
+                from server.db.database import SessionLocal
+                from server.db import pm_models
+                
+                db = SessionLocal()
+                try:
+                    # 방금 저장된 문서의 액션 아이템 조회
+                    document_id = result.get("document_id")
+                    items = db.query(pm_models.PM_ActionItem)\
+                        .filter(pm_models.PM_ActionItem.document_id == document_id)\
+                        .all()
+                    
+                    action_items_list = [
+                        {
+                            "id": item.id,
+                            "task": item.task,
+                            "assignee": item.assignee,
+                            "due_date": str(item.due_date) if item.due_date else None,
+                            "priority": item.priority,
+                            "status": item.status,
+                            "module": item.module,
+                            "phase": item.phase
+                        }
+                        for item in items
+                    ]
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"Failed to fetch action items: {e}")
+        
+        # 응답 구조 개선
+        response_data = {
+            "ok": result.get("ok", True),
+            "project_id": project_id,
+            "document_id": result.get("document_id"),
+            "meeting_id": result.get("meeting_id"),
+            "saved_action_items": saved_count,
+            "action_items": action_items_list,  # ✅ 실제 목록 포함
+            "title": payload.title or "Untitled",
+            "doc_type": payload.doc_type or "meeting"
+        }
+        
+        return AnalyzeResponse(
+            status="ok", 
+            data=response_data,
+            message=f"분석 완료: {saved_count}개 액션 아이템 저장됨"
+        )
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
