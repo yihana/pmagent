@@ -226,6 +226,40 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             return None
 
+# --- pm_graph.py: helper 추가 (파일 상단 또는 _analyze_handler 내부 유틸 부분) ---
+def _safe_float(val, logger=None):
+    """
+    숫자로 변환 가능한 경우 float를 반환하고, 아니면 None을 반환.
+    logger가 주어지면 파싱 실패시 debug로 기록.
+    """
+    if val is None or val == "":
+        return None
+    # 이미 숫자형이면 바로 변환
+    if isinstance(val, (int, float)):
+        try:
+            return float(val)
+        except Exception:
+            return None
+    s = str(val).strip()
+    if s == "":
+        return None
+    # 직접 float 변환 시도
+    try:
+        return float(s)
+    except Exception:
+        # 값이 '10 days' 같은 형태이면 숫자만 추출 시도 (선택적)
+        import re
+        m = re.search(r"[-+]?\d+(\.\d+)?", s)
+        if m:
+            try:
+                return float(m.group(0))
+            except Exception:
+                pass
+        if logger is not None:
+            logger.debug("safe_float: could not parse numeric from %r", val)
+        return None
+
+
     # ------------------------
     # DB 세션 획득 (프로젝트의 방식에 맞춰 수정 가능)
     # ------------------------
@@ -346,8 +380,8 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
                         module=module,
                         phase=phase,
                         evidence_span=str(evidence_span) if evidence_span is not None else None,
-                        expected_effort=float(expected_effort) if expected_effort not in (None, "") else None,
-                        expected_value=float(expected_value) if expected_value not in (None, "") else None,
+                        expected_effort=expected_effort,
+                        expected_value=expected_value,
                         created_at=_utcnow(),
                     )
                     db.add(ai)

@@ -20,8 +20,7 @@ class ScopeAgent:
         1. ingest: RFP 텍스트 로드
         2. extract_items: 요구사항 추출
         3. synthesize_wbs: WBS 구조 생성
-        4. write_outputs: 파일로 저장 (JSON/CSV/MD)
-        5. generate_pmp_outputs: PMP 표준 산출물 생성 (Excel/Word)
+        4. write_outputs: 파일로 저장
     """
     
     def __init__(self, data_dir: Optional[str] = None):
@@ -43,7 +42,7 @@ class ScopeAgent:
             else:
                 payload = {}
 
-        # project_id 추출
+        # project_id 추출 (여러 소스에서)
         project_id = payload.get("project_id")
         if not project_id:
             project_id = payload.get("project_name", "default")
@@ -54,6 +53,7 @@ class ScopeAgent:
         rfp_filename = None
         
         if documents and len(documents) > 0:
+            # documents[0].path를 rfp_filename으로 사용
             first_doc = documents[0]
             if isinstance(first_doc, dict):
                 rfp_filename = first_doc.get("path")
@@ -61,32 +61,17 @@ class ScopeAgent:
                 rfp_filename = getattr(first_doc, "path", None)
         
         depth = int(payload.get("options", {}).get("wbs_depth", 3))
-        methodology = payload.get("methodology", "waterfall")
 
-        # 기존 파이프라인
         raw = await self._ingest(text, rfp_filename)
         items = await self._extract_items(raw)
         wbs = await self._synthesize_wbs(items, depth)
         paths = await self._write_outputs(project_id, raw, items, wbs)
         
-        # ✅ PMP 표준 산출물 생성
-        pmp_outputs = await self._generate_pmp_outputs(
-            project_id=project_id,
-            project_dir=paths["project_dir"],
-            wbs_data=wbs,
-            requirements=items,
-            methodology=methodology
-        )
-        
         return {
-            "status": "ok",
             "project_id": project_id,
-            # 기존 산출물
-            "wbs_json": str(paths["wbs_json"]),
-            "rtm_csv": str(paths["rtm_csv"]),
-            "scope_statement_md": str(paths["scope_md"]),
-            # ✅ PMP 산출물
-            **pmp_outputs,
+            "wbs_json_path": str(paths["wbs_json"]),
+            "rtm_csv_path": str(paths["rtm_csv"]),
+            "scope_md_path": str(paths["scope_md"]),
             "stats": {
                 "items": len(items), 
                 "wbs_nodes": len(wbs.get("nodes", []))
@@ -98,12 +83,7 @@ class ScopeAgent:
         if text:
             return text
         if rfp_filename:
-            # 상대경로/절대경로 처리
-            if Path(rfp_filename).is_absolute():
-                pdf = Path(rfp_filename)
-            else:
-                pdf = self.INPUT_RFP_DIR / rfp_filename
-            
+            pdf = self.INPUT_RFP_DIR / rfp_filename
             if pdf.exists():
                 return f"RFP: {pdf.name}\n\nOverview\nRequirements\nDeliverables"
             else:
@@ -117,33 +97,16 @@ class ScopeAgent:
             items.append({
                 "id": f"R{i:03d}",
                 "text": ln,
-                "type": "req" if "require" in ln.lower() else "note",
-                "category": "기능" if "기능" in ln else "비기능",
-                "source": "RFP"
+                "type": "req" if "require" in ln.lower() else "note"
             })
         await asyncio.sleep(0)
         return items
 
     async def _synthesize_wbs(self, items: List[Dict[str, Any]], depth: int) -> Dict[str, Any]:
         """WBS 구조 생성"""
-        nodes = [{
-            "id": "WBS-1", 
-            "name": "Project", 
-            "level": 1, 
-            "children": [],
-            "deliverables": "프로젝트 완료",
-            "owner": "PM"
-        }]
-        
+        nodes = [{"id": "WBS-1", "name": "Project", "level": 1, "children": []}]
         phases = [
-            {
-                "id": f"WBS-1.{i}", 
-                "name": f"Phase {i}", 
-                "level": 2, 
-                "children": [],
-                "owner": "PM",
-                "deliverables": f"Phase {i} 산출물"
-            } 
+            {"id": f"WBS-1.{i}", "name": f"Phase {i}", "level": 2, "children": []} 
             for i in range(1, 4)
         ]
         nodes[0]["children"] = phases
@@ -155,11 +118,7 @@ class ScopeAgent:
                 p["children"].append({
                     "id": f"{p['id']}.{j}",
                     "name": f"Task {t}",
-                    "level": 3,
-                    "owner": "개발팀",
-                    "deliverables": f"Task {t} 결과물",
-                    "duration_md": "5",
-                    "headcount": "2"
+                    "level": 3
                 })
         
         return {"nodes": nodes, "depth": max(1, min(depth, 3))}
@@ -171,7 +130,7 @@ class ScopeAgent:
         items: List[Dict[str, Any]], 
         wbs: Dict[str, Any]
     ) -> Dict[str, Path]:
-        """기존 결과 파일 저장 (JSON/CSV/MD)"""
+        """결과 파일 저장"""
         proj_dir = self.OUT_DIR / str(project_id)
         proj_dir.mkdir(parents=True, exist_ok=True)
         
@@ -185,10 +144,10 @@ class ScopeAgent:
         # RTM CSV
         rtm_csv = proj_dir / "rtm.csv"
         with open(rtm_csv, "w", encoding="utf-8", newline="") as f:
-            f.write("req_id,text,type,category,source\n")
+            f.write("req_id,text,type\n")
             for it in items:
                 text_safe = it['text'].replace(',', ';').replace('\n', ' ')
-                f.write(f"{it['id']},{text_safe},{it['type']},{it.get('category','')},{it.get('source','')}\n")
+                f.write(f"{it['id']},{text_safe},{it['type']}\n")
         
         # Scope Statement Markdown
         scope_md = proj_dir / "scope_statement.md"
@@ -202,75 +161,7 @@ class ScopeAgent:
             f.write("\n```\n")
         
         return {
-            "project_dir": proj_dir,
             "wbs_json": wbs_json,
             "rtm_csv": rtm_csv,
             "scope_md": scope_md
         }
-
-    async def _generate_pmp_outputs(
-        self,
-        project_id: str,
-        project_dir: Path,
-        wbs_data: Dict,
-        requirements: List[Dict],
-        methodology: str
-    ) -> Dict[str, str]:
-        """PMP 표준 산출물 일괄 생성"""
-        from .outputs.wbs_excel import WBSExcelGenerator
-        from .outputs.rtm_excel import RTMExcelGenerator
-        from .outputs.scope_statement import ScopeStatementGenerator
-        from .outputs.project_charter import ProjectCharterGenerator
-        from .outputs.tailoring import TailoringGenerator
-        
-        outputs = {}
-        
-        try:
-            # 1. WBS Excel
-            wbs_excel_path = project_dir / f"{project_id}_WBS.xlsx"
-            outputs["wbs_excel"] = WBSExcelGenerator.generate(wbs_data, wbs_excel_path)
-        except Exception as e:
-            outputs["wbs_excel"] = f"Error: {e}"
-        
-        try:
-            # 2. RTM Excel
-            rtm_excel_path = project_dir / f"{project_id}_요구사항추적표.xlsx"
-            outputs["rtm_excel"] = RTMExcelGenerator.generate(requirements, rtm_excel_path)
-        except Exception as e:
-            outputs["rtm_excel"] = f"Error: {e}"
-        
-        try:
-            # 3. 범위기술서 Excel
-            scope_excel_path = project_dir / f"{project_id}_범위기술서.xlsx"
-            outputs["scope_statement_excel"] = ScopeStatementGenerator.generate(
-                project_name=project_id,
-                wbs_data=wbs_data,
-                requirements=requirements,
-                output_path=scope_excel_path
-            )
-        except Exception as e:
-            outputs["scope_statement_excel"] = f"Error: {e}"
-        
-        try:
-            # 4. 프로젝트 헌장 Word
-            charter_path = project_dir / f"{project_id}_프로젝트헌장.docx"
-            outputs["project_charter_docx"] = ProjectCharterGenerator.generate(
-                project_name=project_id,
-                requirements=requirements,
-                wbs_data=wbs_data,
-                output_path=charter_path
-            )
-        except Exception as e:
-            outputs["project_charter_docx"] = f"Error: {e}"
-        
-        try:
-            # 5. 테일러링 Excel
-            tailoring_path = project_dir / f"{project_id}_테일러링.xlsx"
-            outputs["tailoring_excel"] = TailoringGenerator.generate(
-                methodology=methodology,
-                output_path=tailoring_path
-            )
-        except Exception as e:
-            outputs["tailoring_excel"] = f"Error: {e}"
-        
-        return outputs

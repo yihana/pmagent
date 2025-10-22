@@ -73,12 +73,15 @@ class Meeting(Base):
 
     # relations
     project = relationship("Project", back_populates="meetings")
+
+    # ✅ 역참조 정확히 명시
     action_items = relationship(
         "PM_ActionItem",
         back_populates="meeting",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
     fup_items = relationship(
         "FupItem",
         back_populates="meeting",
@@ -93,8 +96,11 @@ class PM_ActionItem(Base):
     id = Column(Integer, primary_key=True)
     project_id = Column(Integer, index=True, nullable=False)
     document_id = Column(Integer, ForeignKey("pm_documents.id"), nullable=True)
+
+    # ✅ 회의 연동 컬럼/관계 (스키마에 meeting_id 존재해야 함)
     meeting_id = Column(Integer, ForeignKey("pm_meetings.id"), nullable=True)
-    
+    meeting = relationship("Meeting", back_populates="action_items")
+
     assignee = Column(String(100), nullable=True)
     task = Column(Text, nullable=False)
     due_date = Column(Date, nullable=True)
@@ -106,8 +112,6 @@ class PM_ActionItem(Base):
     expected_effort = Column(Float, nullable=True)
     expected_value = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    meeting = relationship("Meeting", back_populates="action_items")
 
 
 class FupItem(Base):
@@ -140,140 +144,31 @@ class Risk(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-# ✅ Scope Agent 결과 저장
+#20251016 scope&schedule agent 추가
 class PM_Scope(Base):
     __tablename__ = "pm_scope"
-    
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, nullable=False)
+    project_id = Column(Integer)
     scope_statement_md = Column(String(2000))
     rtm_csv = Column(String(1024))
     wbs_json = Column(String(1024))
-    
-    # ✅ PMP 표준 산출물 경로 추가
-    wbs_excel = Column(String(1024), nullable=True)
-    rtm_excel = Column(String(1024), nullable=True)
-    scope_statement_excel = Column(String(1024), nullable=True)
-    project_charter_docx = Column(String(1024), nullable=True)
-    tailoring_excel = Column(String(1024), nullable=True)
-    
     full_json = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-
-# ✅ Schedule Agent 결과 저장
 class PM_Schedule(Base):
     __tablename__ = "pm_schedule"
-    
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, nullable=False)
-    methodology = Column(String(20), default="waterfall")  # waterfall/agile
-    
-    # 기본 산출물
+    project_id = Column(Integer)
     plan_csv = Column(String(1024))
     gantt_json = Column(String(1024))
     critical_path = Column(String(1024))
-    burndown_json = Column(String(1024), nullable=True)  # Agile 전용
-    
-    # ✅ PMP 표준 산출물 경로 추가
-    change_management_excel = Column(String(1024), nullable=True)
-    
     full_json = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-
-# ✅ Task (WBS 아이템별 상세 정보)
-class PM_Task(Base):
-    __tablename__ = "pm_tasks"
-    
-    id = Column(String(50), primary_key=True)  # WBS-1.1.2 형태
-    project_id = Column(Integer, nullable=False, index=True)
-    name = Column(String(500), nullable=False)
-    type = Column(String(20))  # phase/task/deliverable
-    parent_id = Column(String(50), nullable=True)
-    
-    # 일정 정보
-    duration_days = Column(Integer)
-    story_points = Column(Integer, nullable=True)  # Agile 전용
-    
-    # CPM 계산 결과
-    es = Column(Integer)  # Early Start
-    ef = Column(Integer)  # Early Finish
-    ls = Column(Integer, nullable=True)  # Late Start
-    lf = Column(Integer, nullable=True)  # Late Finish
-    float = Column(Float, nullable=True)  # Total Float
-    
-    # 실제 일정
-    planned_start = Column(Date, nullable=True)
-    planned_end = Column(Date, nullable=True)
-    actual_start = Column(Date, nullable=True)
-    actual_end = Column(Date, nullable=True)
-    
-    # 상태
-    status = Column(String(20), default="Not Started")  # Not Started/In Progress/Completed
-    progress = Column(Integer, default=0)  # 0~100
-    assignee = Column(String(100), nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-# ✅ Task 선후행 관계
-class PM_TaskLink(Base):
-    __tablename__ = "pm_task_links"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    project_id = Column(Integer, nullable=False, index=True)
-    predecessor_id = Column(String(50), nullable=False)
-    successor_id = Column(String(50), nullable=False)
-    link_type = Column(String(10), default="FS")  # FS/SS/FF/SF
-    lag_days = Column(Integer, default=0)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-# ✅ Sprint (Agile 전용)
-class PM_Sprint(Base):
-    __tablename__ = "pm_sprints"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    project_id = Column(Integer, nullable=False, index=True)
-    sprint_no = Column(Integer, nullable=False)
-    
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-    
-    committed_sp = Column(Integer, default=0)  # Committed Story Points
-    completed_sp = Column(Integer, default=0)  # Completed Story Points
-    
-    status = Column(String(20), default="Planned")  # Planned/Active/Completed
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-# ✅ 산출물 버전 관리
-class PM_OutputVersion(Base):
-    __tablename__ = "pm_output_versions"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    project_id = Column(Integer, nullable=False, index=True)
-    version_tag = Column(String(50), nullable=False)  # v1.0, v1.1 등
-    output_type = Column(String(50), nullable=False)  # scope/schedule/report
-    
-    # 생성된 파일 경로들 (JSON)
-    files_json = Column(JSON)
-    
-    generated_at = Column(DateTime, default=datetime.utcnow)
-    generated_by = Column(String(100), nullable=True)
-
-
-# ✅ 이벤트 로그
 class PM_Log(Base):
     __tablename__ = "pm_logs"
-    
     id = Column(Integer, primary_key=True, index=True)
-    event_type = Column(String(200))  # scope_generated/schedule_generated/task_updated
+    event_type = Column(String(200))
     message = Column(Text)
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
