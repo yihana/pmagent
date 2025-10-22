@@ -22,20 +22,21 @@ except Exception as e:
     pm_models = None
     _DB_AVAILABLE = False
 
-# Analyzer: use PM_AnalyzerAgent directly (the generic `from server.workflow.agents import analyzer`
-# does not exist in this repo layout). Rely on PM_AnalyzerAgent as the canonical analyzer.
+# Analyzer / Report 모듈 import
 if TYPE_CHECKING:
     from server.workflow.agents.pm_analyzer import PM_AnalyzerAgent
-
+# Analyzer: PM_AnalyzerAgent 직접 사용
 try:
+    # Runtime import (inside try/except so server can run when agent isn't available)
     from server.workflow.agents.pm_analyzer import PM_AnalyzerAgent
-    ANALYZER_AVAILABLE = True
-    _ANALYZER_INSTANCE: Optional["PM_AnalyzerAgent"] = None
+    _ANALYZER_AGENT_AVAILABLE = True
+    _ANALYZER_AGENT_INSTANCE: Optional["PM_AnalyzerAgent"] = None
 except Exception as e:
-    logger.warning("[ANALYZER] import failed: %s", e)
+    logger.warning("[PM_ANALYZER] import failed: %s", e)
     PM_AnalyzerAgent = None
-    ANALYZER_AVAILABLE = False
-    _ANALYZER_INSTANCE = None
+    _ANALYZER_AGENT_AVAILABLE = False
+    _ANALYZER_AGENT_INSTANCE = None
+
 
 # Report 모듈 import
 try:
@@ -46,6 +47,7 @@ except Exception as e:
     def build_weekly_report(db: Session, project_id: int) -> Dict[str, Any]:
         return {"project_id": project_id, "summary": "report module not found"}
     _REPORT_AVAILABLE = False
+
 
 # Scope Agent import
 try:
@@ -122,36 +124,19 @@ def _to_dict(obj: Any) -> Dict[str, Any]:
 
 
 # ===============================
-#  Analyzer 실행 가드 (ANALYZER_AVAILABLE 사용)
+#  Analyzer 실행 가드
 # ===============================
 async def _run_analyzer_with_timeout(text: str, project_id: int) -> List[Dict[str, Any]]:
-    """
-    PM_AnalyzerAgent.analyze_minutes()를 timeout-safe로 감싸는 함수.
-    This implementation uses ANALYZER_AVAILABLE and _ANALYZER_INSTANCE names for consistency.
-    """
-    if not (ANALYZER_AVAILABLE and PM_AnalyzerAgent is not None):
-        logger.info("[ANALYZER] PM_AnalyzerAgent not available; skip")
+    """analyzer.analyze_minutes() 실행을 timeout-safe로 감싸는 함수"""
+    if not (_ANALYZER_AVAILABLE and analyzer and hasattr(analyzer, "analyze_minutes")):
+        logger.info("[ANALYZER] module not found; skip")
         return []
 
-    global _ANALYZER_INSTANCE
-    if _ANALYZER_INSTANCE is None:
-        try:
-            _ANALYZER_INSTANCE = PM_AnalyzerAgent()
-            logger.debug("[ANALYZER] PM_AnalyzerAgent instantiated")
-        except Exception as e:
-            logger.exception("[ANALYZER] failed to instantiate PM_AnalyzerAgent: %s", e)
-            _ANALYZER_INSTANCE = None
-            return []
-
-    def _call_agent():
-        try:
-            return _ANALYZER_INSTANCE.analyze_minutes(text, project_meta={"project_id": project_id})
-        except Exception as e:
-            logger.exception("[ANALYZER] agent analyze_minutes exception: %s", e)
-            return []
+    def _call():
+        return analyzer.analyze_minutes(text, project_meta={"project_id": project_id})
 
     try:
-        raw = await asyncio.wait_for(asyncio.to_thread(_call_agent), timeout=ANALYZE_TIMEOUT_SEC)
+        raw = await asyncio.wait_for(asyncio.to_thread(_call), timeout=ANALYZE_TIMEOUT_SEC)
     except asyncio.TimeoutError:
         logger.warning(f"[ANALYZER] timeout after {ANALYZE_TIMEOUT_SEC}s; skip items")
         return []
@@ -191,7 +176,7 @@ class _App:
 
 
 # ===============================
-#  분석 핸들러
+#  분석 핸들러 1021
 # ===============================
 async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -266,8 +251,6 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
             run_scope = (mode == "scope")
             save_items = (mode == "analyze") or save_items_flag
 
-        logger.debug("[ANALYZE] project_id=%s mode=%s run_scope=%s save_items=%s doc_type=%s", project_id, mode, run_scope, save_items, doc_type)
-
         # ------------------------
         # 1) 문서 저장 (항상)
         # ------------------------
@@ -288,10 +271,10 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
         # ------------------------
         raw_items: List[Dict[str, Any]] = []
         if doc_type == "meeting":
+            # 공용 analyzer 호출 (기존 util 함수 사용)
             raw_items = await _run_analyzer_with_timeout(text, project_id)
             if raw_items is None:
                 raw_items = []
-        logger.debug("[ANALYZE] analyzer returned %d raw_items", len(raw_items) if raw_items is not None else 0)
 
         # ------------------------
         # 3) Scope & Schedule (옵션)
@@ -364,10 +347,6 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
                 logger.exception("[ANALYZE] commit failed when saving action items: %s", e)
                 raise RuntimeError(f"commit failed: {e}")
         else:
-            if not save_items:
-                logger.info("[ANALYZE] save_items is False; skipping action item persistence")
-            else:
-                logger.info("[ANALYZE] no raw_items to save")
             # action item 저장 안할 경우 문서만 커밋
             try:
                 db.commit()
