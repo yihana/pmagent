@@ -1,4 +1,125 @@
 {
   "project_id": "None",
-  "critical_path": []
+  "critical_path": [
+    {
+      "id": "WBS-1.1",
+      "name": "Phase 1",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.1.1",
+      "name": "Task 1",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.1.2",
+      "name": "Task 2",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.1.3",
+      "name": "Task 3",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.2",
+      "name": "Phase 2",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.2.1",
+      "name": "Task 4",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.2.2",
+      "name": "Task 5",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.2.3",
+      "name": "Task 6",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.3",
+      "name": "Phase 3",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.3.1",
+      "name": "Task 7",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.3.2",
+      "name": "Task 8",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    },
+    {
+      "id": "WBS-1.3.3",
+      "name": "Task 9",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    }
+  ]
 }

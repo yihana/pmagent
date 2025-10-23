@@ -1,19 +1,29 @@
 # server/routers/pm_work.py
 from typing import Dict, Any, Optional, List
-from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 import traceback
 import shutil
+import logging
 from pathlib import Path
+
+from server.db.database import get_db
+from server.db import pm_crud, pm_models
 from server.workflow.pm_graph import run_pipeline
 
 router = APIRouter(prefix="/api/v1/pm", tags=["pm"])
+logger = logging.getLogger(__name__)
 
 # 파일 업로드 디렉토리 설정
 UPLOAD_DIR = Path("data/inputs/RFP")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# ===== 공용 모델 =====
+
+# ===============================
+# 공용 모델
+# ===============================
+
 class AnalyzeRequest(BaseModel):
     project_id: int | str = Field(..., description="프로젝트 ID")
     doc_type: Optional[str] = Field(default="meeting")
@@ -31,7 +41,11 @@ class ReportResponse(BaseModel):
     data: Dict[str, Any] | list | None = None
     message: Optional[str] = None
 
-# ===== Scope 관련 모델 =====
+
+# ===============================
+# Scope 관련 모델
+# ===============================
+
 class DocumentRef(BaseModel):
     path: str
     type: Optional[str] = "RFP"
@@ -52,7 +66,11 @@ class ScopeResponse(BaseModel):
     data: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
 
-# ===== Schedule 관련 모델 =====
+
+# ===============================
+# Schedule 관련 모델
+# ===============================
+
 class CalendarModel(BaseModel):
     start_date: str
     work_week: Optional[List[int]] = Field(default=[1,2,3,4,5])
@@ -79,7 +97,11 @@ class ScheduleResponse(BaseModel):
     data: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
 
-# ===== Workflow (Scope -> Schedule) 모델 =====
+
+# ===============================
+# Workflow 모델
+# ===============================
+
 class WorkflowPayload(BaseModel):
     scope: ScopeRequest
     schedule: ScheduleRequest
@@ -90,9 +112,11 @@ class WorkflowResponse(BaseModel):
     schedule: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
 
-# -----------------------
-# 신규: 파일 업로드 엔드포인트
-# -----------------------
+
+# ===============================
+# 파일 업로드 엔드포인트
+# ===============================
+
 @router.post("/upload/rfp")
 async def upload_rfp(file: UploadFile = File(...)):
     """
@@ -105,26 +129,37 @@ async def upload_rfp(file: UploadFile = File(...)):
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="PDF 파일만 업로드 가능합니다.")
         
+        # 파일명 안전하게 처리
+        filename = file.filename.replace(" ", "_")
+        file_path = UPLOAD_DIR / filename
+        
         # 파일 저장
-        file_path = UPLOAD_DIR / file.filename
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
+        # 상대경로 반환
+        relative_path = f"data/inputs/RFP/{filename}"
+        
+        logger.info(f"[UPLOAD] File saved: {relative_path}")
+        
         return {
             "status": "ok",
-            "filename": file.filename,
-            "path": str(file_path),
-            "message": f"파일이 업로드되었습니다: {file_path}"
+            "filename": filename,
+            "path": relative_path,
+            "size": file_path.stat().st_size,
+            "message": f"파일이 업로드되었습니다: {relative_path}"
         }
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception(f"[UPLOAD] Failed: {e}")
         raise HTTPException(status_code=500, detail=f"파일 업로드 실패: {str(e)}")
 
-# -----------------------
+
+# ===============================
 # 기존: 그래프 분석 / 리포트
-# -----------------------
+# ===============================
+
 @router.post("/graph/analyze", response_model=AnalyzeResponse)
 async def graph_analyze(payload: AnalyzeRequest):
     """
@@ -145,7 +180,6 @@ async def graph_analyze(payload: AnalyzeRequest):
         if saved_count > 0 and project_id:
             try:
                 from server.db.database import SessionLocal
-                from server.db import pm_models
                 
                 db = SessionLocal()
                 try:
@@ -181,6 +215,7 @@ async def graph_analyze(payload: AnalyzeRequest):
             "meeting_id": result.get("meeting_id"),
             "saved_action_items": saved_count,
             "action_items": action_items_list,  # ✅ 실제 목록 포함
+            "action_items_summary": result.get("action_items"),  # 기존 요약 정보
             "title": payload.title or "Untitled",
             "doc_type": payload.doc_type or "meeting"
         }
@@ -191,8 +226,10 @@ async def graph_analyze(payload: AnalyzeRequest):
             message=f"분석 완료: {saved_count}개 액션 아이템 저장됨"
         )
     except Exception as e:
+        logger.exception(f"[Analyze] Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/graph/report", response_model=ReportResponse)
 async def graph_report(project_id: int = Query(..., description="프로젝트 ID")):
@@ -203,29 +240,69 @@ async def graph_report(project_id: int = Query(..., description="프로젝트 ID
         result = await run_pipeline(kind="report", payload={"project_id": project_id})
         return ReportResponse(status="ok", data=result)
     except Exception as e:
+        logger.exception(f"[Report] Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-# -----------------------
+
+# ===============================
 # 신규: Scope Agent (범위관리)
-# -----------------------
+# ===============================
+
 @router.post("/scope/analyze", response_model=ScopeResponse)
-async def scope_analyze(payload: ScopeRequest):
+async def scope_analyze(payload: ScopeRequest, db: Session = Depends(get_db)):
     """
-    Scope Agent 실행
+    Scope Agent 실행 + PMP 표준 산출물 생성
     """
     try:
+        project_name = payload.project_name or "default"
+        methodology = payload.methodology or "waterfall"
+        
+        logger.info(f"[Scope Agent] Starting analysis for project: {project_name}")
+        
         result = await run_pipeline(kind="scope", payload=payload.model_dump())
+        
+        # DB에 저장
+        try:
+            project = pm_crud.get_or_create_project(
+                db,
+                project_id=hash(project_name) % 1000000,
+                name=project_name
+            )
+            
+            scope_record = pm_crud.save_scope_result(
+                db,
+                project_id=project.id,
+                scope_json=result
+            )
+            
+            pm_crud.log_event(
+                db,
+                event_type="scope_generated",
+                message=f"Scope generated for project: {project_name}",
+                details={
+                    "project_id": project.id,
+                    "methodology": methodology,
+                }
+            )
+            
+            logger.info(f"[Scope Agent] Results saved to DB (scope_id: {scope_record.id})")
+            
+        except Exception as db_error:
+            logger.error(f"[Scope Agent] DB save failed: {db_error}")
+        
         return ScopeResponse(
             status="ok",
-            scope_statement_md=result.get("scope_md_path"),
-            rtm_csv=result.get("rtm_csv_path"),
-            wbs_json=result.get("wbs_json_path"),
+            scope_statement_md=result.get("scope_md_path") or result.get("scope_statement_md"),
+            rtm_csv=result.get("rtm_csv_path") or result.get("rtm_csv"),
+            wbs_json=result.get("wbs_json_path") or result.get("wbs_json"),
             data=result
         )
     except Exception as e:
+        logger.exception(f"[Scope Agent] Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/scope/summary", response_model=ScopeResponse)
 async def scope_summary(project_id: int = Query(..., description="프로젝트 ID")):
@@ -236,19 +313,58 @@ async def scope_summary(project_id: int = Query(..., description="프로젝트 I
         result = await run_pipeline(kind="scope_summary", payload={"project_id": project_id})
         return ScopeResponse(status="ok", data=result)
     except Exception as e:
+        logger.exception(f"[Scope Summary] Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-# -----------------------
+
+# ===============================
 # 신규: Schedule Agent (일정관리)
-# -----------------------
+# ===============================
+
 @router.post("/schedule/analyze", response_model=ScheduleResponse)
-async def schedule_analyze(payload: ScheduleRequest):
+async def schedule_analyze(payload: ScheduleRequest, db: Session = Depends(get_db)):
     """
-    Schedule Agent 실행
+    Schedule Agent 실행 + PMP 표준 산출물 생성
     """
     try:
+        project_id = payload.project_id or "default"
+        methodology = payload.methodology or "waterfall"
+        
+        logger.info(f"[Schedule Agent] Starting analysis for project: {project_id}")
+        
         result = await run_pipeline(kind="schedule", payload=payload.model_dump())
+        
+        # DB에 저장
+        try:
+            project = pm_crud.get_or_create_project(
+                db,
+                project_id=hash(str(project_id)) % 1000000,
+                name=str(project_id)
+            )
+            
+            schedule_record = pm_crud.save_schedule_result(
+                db,
+                project_id=project.id,
+                schedule_json=result,
+                methodology=methodology
+            )
+            
+            pm_crud.log_event(
+                db,
+                event_type="schedule_generated",
+                message=f"Schedule generated for project: {project_id}",
+                details={
+                    "project_id": project.id,
+                    "methodology": methodology,
+                }
+            )
+            
+            logger.info(f"[Schedule Agent] Results saved to DB (schedule_id: {schedule_record.id})")
+            
+        except Exception as db_error:
+            logger.error(f"[Schedule Agent] DB save failed: {db_error}")
+        
         return ScheduleResponse(
             status="ok",
             plan_csv=result.get("plan_csv"),
@@ -257,8 +373,10 @@ async def schedule_analyze(payload: ScheduleRequest):
             data=result
         )
     except Exception as e:
+        logger.exception(f"[Schedule Agent] Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/schedule/timeline", response_model=ScheduleResponse)
 async def schedule_timeline(project_id: int = Query(..., description="프로젝트 ID")):
@@ -269,12 +387,15 @@ async def schedule_timeline(project_id: int = Query(..., description="프로젝�
         result = await run_pipeline(kind="schedule_timeline", payload={"project_id": project_id})
         return ScheduleResponse(status="ok", data=result)
     except Exception as e:
+        logger.exception(f"[Schedule Timeline] Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-# -----------------------
+
+# ===============================
 # 신규: Workflow (Scope -> Schedule)
-# -----------------------
+# ===============================
+
 @router.post("/workflow/scope-then-schedule", response_model=WorkflowResponse)
 async def workflow_scope_then_schedule(payload: WorkflowPayload):
     """
@@ -286,8 +407,109 @@ async def workflow_scope_then_schedule(payload: WorkflowPayload):
     }
     """
     try:
+        logger.info("[Workflow] Starting scope-then-schedule workflow")
+        
         result = await run_pipeline(kind="workflow_scope_then_schedule", payload=payload.model_dump())
-        return WorkflowResponse(status="ok", scope=result.get("scope"), schedule=result.get("schedule"))
+        
+        logger.info("[Workflow] Completed successfully")
+        
+        return WorkflowResponse(
+            status="ok", 
+            scope=result.get("scope"), 
+            schedule=result.get("schedule")
+        )
     except Exception as e:
+        logger.exception(f"[Workflow] Error: {e}")
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===============================
+# 조회 엔드포인트
+# ===============================
+
+@router.get("/projects/{project_id}/scope/latest")
+async def get_latest_scope(project_id: int, db: Session = Depends(get_db)):
+    """최신 Scope 결과 조회"""
+    try:
+        scope = pm_crud.get_latest_scope(db, project_id)
+        
+        if not scope:
+            raise HTTPException(status_code=404, detail="Scope not found")
+        
+        return {
+            "id": scope.id,
+            "project_id": scope.project_id,
+            "created_at": scope.created_at,
+            "updated_at": scope.updated_at,
+            "files": {
+                "wbs_json": scope.wbs_json,
+                "rtm_csv": scope.rtm_csv,
+                "scope_statement_md": scope.scope_statement_md,
+                "wbs_excel": scope.wbs_excel,
+                "rtm_excel": scope.rtm_excel,
+                "scope_statement_excel": scope.scope_statement_excel,
+                "project_charter_docx": scope.project_charter_docx,
+                "tailoring_excel": scope.tailoring_excel,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting scope: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/projects/{project_id}/schedule/latest")
+async def get_latest_schedule(project_id: int, db: Session = Depends(get_db)):
+    """최신 Schedule 결과 조회"""
+    try:
+        schedule = pm_crud.get_latest_schedule(db, project_id)
+        
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        
+        return {
+            "id": schedule.id,
+            "project_id": schedule.project_id,
+            "methodology": schedule.methodology,
+            "created_at": schedule.created_at,
+            "updated_at": schedule.updated_at,
+            "files": {
+                "plan_csv": schedule.plan_csv,
+                "gantt_json": schedule.gantt_json,
+                "critical_path": schedule.critical_path,
+                "burndown_json": schedule.burndown_json,
+                "change_management_excel": schedule.change_management_excel,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/projects")
+async def list_projects(db: Session = Depends(get_db)):
+    """프로젝트 목록 조회"""
+    try:
+        projects = db.query(pm_models.Project).all()
+        
+        return {
+            "count": len(projects),
+            "projects": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "created_at": p.created_at
+                }
+                for p in projects
+            ]
+        }
+        
+    except Exception as e:
+        logger.exception(f"Error listing projects: {e}")
         raise HTTPException(status_code=500, detail=str(e))
