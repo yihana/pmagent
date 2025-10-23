@@ -1,7 +1,6 @@
 # server/workflow/pm_graph.py
 from __future__ import annotations
 import asyncio
-import re
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 import logging
@@ -14,17 +13,17 @@ logger = logging.getLogger("pm.graph")
 
 # DB / 모델 import
 try:
-    from server.db.database import SessionLocal, get_db  # ✅ get_db 추가
+    from server.db.database import SessionLocal
     from server.db import pm_models
     _DB_AVAILABLE = True
 except Exception as e:
     logger.warning("[DB] import failed: %s", e)
     SessionLocal = None
-    get_db = None  # ✅ get_db None 처리
     pm_models = None
     _DB_AVAILABLE = False
 
-# Analyzer
+# Analyzer: use PM_AnalyzerAgent directly (the generic `from server.workflow.agents import analyzer`
+# does not exist in this repo layout). Rely on PM_AnalyzerAgent as the canonical analyzer.
 if TYPE_CHECKING:
     from server.workflow.agents.pm_analyzer import PM_AnalyzerAgent
 
@@ -121,65 +120,14 @@ def _to_dict(obj: Any) -> Dict[str, Any]:
     except Exception:
         return {"value": obj}
 
-# ✅ 날짜 파싱 유틸 (전역으로 이동)
-def _parse_date_safe(val: Any) -> Optional[date]:
-    """다양한 날짜 형식을 안전하게 파싱"""
-    if val is None:
-        return None
-    if isinstance(val, date):
-        return val
-    s = str(val).strip()
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except Exception:
-            pass
-    try:
-        return datetime.fromisoformat(s).date()
-    except Exception:
-        return None
-
-# ✅ 숫자 변환 유틸 (전역으로 이동)
-def _safe_float(val, logger_inst=None) -> Optional[float]:
-    """
-    숫자로 변환 가능한 경우 float를 반환하고, 아니면 None을 반환.
-    logger가 주어지면 파싱 실패시 debug로 기록.
-    """
-    if val is None or val == "":
-        return None
-    # 이미 숫자형이면 바로 변환
-    if isinstance(val, (int, float)):
-        try:
-            return float(val)
-        except Exception:
-            return None
-    s = str(val).strip()
-    if s == "":
-        return None
-    # 직접 float 변환 시도
-    try:
-        return float(s)
-    except Exception:
-        # 값이 '10 days' 같은 형태이면 숫자만 추출 시도
-        m = re.search(r"[-+]?\d+(\.\d+)?", s)
-        if m:
-            try:
-                return float(m.group(0))
-            except Exception:
-                pass
-        if logger_inst is not None:
-            logger_inst.debug("safe_float: could not parse numeric from %r", val)
-        return None
-
 
 # ===============================
-#  Analyzer 실행 가드
+#  Analyzer 실행 가드 (ANALYZER_AVAILABLE 사용)
 # ===============================
 async def _run_analyzer_with_timeout(text: str, project_id: int) -> List[Dict[str, Any]]:
     """
     PM_AnalyzerAgent.analyze_minutes()를 timeout-safe로 감싸는 함수.
+    This implementation uses ANALYZER_AVAILABLE and _ANALYZER_INSTANCE names for consistency.
     """
     if not (ANALYZER_AVAILABLE and PM_AnalyzerAgent is not None):
         logger.info("[ANALYZER] PM_AnalyzerAgent not available; skip")
@@ -222,6 +170,7 @@ class _App:
     def __init__(self, kind: str):
         self.kind = kind
 
+
     async def ainvoke(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         if self.kind == "analyze":
             return await _analyze_handler(payload)
@@ -253,24 +202,80 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
       - mode 'scope': run ScopeAgent/ScheduleAgent only, do NOT save action items
       - mode 'both': run scope AND save action items
     """
-    
-    # ✅ DB 세션 획득 (get_db 사용)
-    db = None
-    try:
-        if get_db is not None:
-            db = next(get_db())
-        elif SessionLocal is not None:
-            db = SessionLocal()
-        else:
-            raise RuntimeError("Could not obtain DB session. DB module not available.")
-    except Exception as e:
-        logger.exception("[ANALYZE] Failed to get DB session: %s", e)
-        raise RuntimeError(f"Could not obtain DB session: {e}")
+    # ------------------------
+    # Helper functions
+    # ------------------------
+    def _utcnow():
+        return datetime.utcnow()
 
+    def _parse_date_safe(val: Any) -> Optional[date]:
+        if val is None:
+            return None
+        if isinstance(val, date):
+            return val
+        s = str(val).strip()
+        if not s:
+            return None
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(s, fmt).date()
+            except Exception:
+                pass
+        try:
+            return datetime.fromisoformat(s).date()
+        except Exception:
+            return None
+
+# --- pm_graph.py: helper 추가 (파일 상단 또는 _analyze_handler 내부 유틸 부분) ---
+def _safe_float(val, logger=None):
+    """
+    숫자로 변환 가능한 경우 float를 반환하고, 아니면 None을 반환.
+    logger가 주어지면 파싱 실패시 debug로 기록.
+    """
+    if val is None or val == "":
+        return None
+    # 이미 숫자형이면 바로 변환
+    if isinstance(val, (int, float)):
+        try:
+            return float(val)
+        except Exception:
+            return None
+    s = str(val).strip()
+    if s == "":
+        return None
+    # 직접 float 변환 시도
     try:
-        # ------------------------
-        # 파라미터 체크 및 초기화
-        # ------------------------
+        return float(s)
+    except Exception:
+        # 값이 '10 days' 같은 형태이면 숫자만 추출 시도 (선택적)
+        import re
+        m = re.search(r"[-+]?\d+(\.\d+)?", s)
+        if m:
+            try:
+                return float(m.group(0))
+            except Exception:
+                pass
+        if logger is not None:
+            logger.debug("safe_float: could not parse numeric from %r", val)
+        return None
+
+
+    # ------------------------
+    # DB 세션 획득 (프로젝트의 방식에 맞춰 수정 가능)
+    # ------------------------
+    try:
+        db = next(get_db())  # 기존 프로젝트에서 get_db() 패턴을 사용하면 이 라인으로
+    except Exception:
+        # fallback: SessionLocal if available
+        try:
+            db = SessionLocal()
+        except Exception:
+            raise RuntimeError("Could not obtain DB session. Adjust _analyze_handler to your project's DB session method.")
+
+    # ------------------------
+    # 파라미터 체크 및 초기화
+    # ------------------------
+    try:
         project_id = payload.get("project_id")
         if project_id is None:
             raise ValueError("project_id is required")
@@ -295,8 +300,7 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
             run_scope = (mode == "scope")
             save_items = (mode == "analyze") or save_items_flag
 
-        logger.debug("[ANALYZE] project_id=%s mode=%s run_scope=%s save_items=%s doc_type=%s", 
-                     project_id, mode, run_scope, save_items, doc_type)
+        logger.debug("[ANALYZE] project_id=%s mode=%s run_scope=%s save_items=%s doc_type=%s", project_id, mode, run_scope, save_items, doc_type)
 
         # ------------------------
         # 1) 문서 저장 (항상)
@@ -311,7 +315,7 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
         db.add(doc)
         db.flush()  # doc.id 확보
-        meeting_id = doc.id
+        meeting_id = doc.id  # 기본적으로 문서 id를 meeting_id로 사용
 
         # ------------------------
         # 2) Analyzer 실행 (회의록 유형만 수행)
@@ -329,46 +333,22 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
         scope_out = None
         sched_out = None
         if run_scope:
-            try:
-                # ScopeAgent 사용
-                if _SCOPE_AVAILABLE and ScopeAgent is not None:
-                    sa = ScopeAgent(data_dir=str(DATA_DIR))
-                    scope_payload = {
-                        "project_name": f"Project-{project_id}",
-                        "text": text,
-                        "methodology": payload.get("methodology", "waterfall"),
-                        "options": {
-                            "chunk_size": payload.get("chunk_size", 500),
-                            "overlap": payload.get("overlap", 100)
-                        }
-                    }
-                    scope_out = await sa.pipeline(scope_payload)
-                    logger.info("[ANALYZE] Scope completed")
-                else:
-                    logger.warning("[ANALYZE] ScopeAgent not available")
+            # ScopeAgent 사용 (기존 방식 유지)
+            sa = ScopeAgent()
+            # 여기서는 문서 텍스트로 간단 인제스트; 실제 구현에 맞게 변경 가능
+            sa.ingest([text], chunk=payload.get("chunk_size", 500), overlap=payload.get("overlap", 100))
+            items_for_scope = sa.extract_items()
+            wbs = sa.synthesize_wbs(items_for_scope, payload.get("methodology", "waterfall"))
+            scope_out = sa.write_outputs(items_for_scope, wbs)
 
-                # Schedule
-                if _SCHEDULE_AVAILABLE and ScheduleAgent is not None and scope_out:
-                    sch = ScheduleAgent(data_dir=str(DATA_DIR))
-                    wbs_json = scope_out.get("wbs_json") or scope_out.get("wbs_json_path")
-                    if wbs_json:
-                        sched_payload = {
-                            "project_id": f"Project-{project_id}",
-                            "wbs_json": wbs_json,
-                            "methodology": payload.get("methodology", "waterfall"),
-                            "calendar": payload.get("calendar", {}),
-                            "sprint_length_weeks": payload.get("sprint_length_weeks", 2)
-                        }
-                        sched_out = await sch.pipeline(sched_payload)
-                        logger.info("[ANALYZE] Schedule completed")
-                else:
-                    logger.warning("[ANALYZE] ScheduleAgent not available or no WBS")
-            
-            except Exception as e:
-                logger.exception("[ANALYZE] Scope/Schedule failed: %s", e)
+            # Schedule
+            sch = ScheduleAgent()
+            est = sch.estimate(scope_out.get("wbs_json") if isinstance(scope_out, dict) else scope_out, payload.get("methodology", "waterfall"))
+            rows, meta = sch.build_dag_and_schedule(est, payload.get("calendar", {}), payload.get("sprint_length_weeks"))
+            sched_out = sch.write_outputs(rows, meta)
 
         # ------------------------
-        # 4) Action Item 저장
+        # 4) Action Item 저장 (Analyzer 결과 기반) — scope 모드일 때는 저장하지 않음
         # ------------------------
         saved = 0
         errors: List[Dict[str, Any]] = []
@@ -378,9 +358,6 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
                     item = raw if isinstance(raw, dict) else dict(raw)
 
                     task = item.get("task") or item.get("title") or item.get("summary") or item.get("description") or ""
-                    if not task.strip():
-                        continue
-                        
                     assignee = item.get("assignee") or item.get("owner") or None
                     priority = item.get("priority") or item.get("prio") or "Medium"
                     status = item.get("status") or "Open"
@@ -388,8 +365,8 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
                     module = item.get("module")
                     phase = item.get("phase")
                     evidence_span = item.get("evidence_span") or item.get("evidence") or None
-                    expected_effort = _safe_float(item.get("expected_effort") or item.get("effort"), logger)
-                    expected_value = _safe_float(item.get("expected_value") or item.get("value"), logger)
+                    expected_effort = item.get("expected_effort") or item.get("effort")
+                    expected_value = item.get("expected_value") or item.get("value")
 
                     ai = pm_models.PM_ActionItem(
                         project_id=project_id,
@@ -425,6 +402,7 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
                 logger.info("[ANALYZE] save_items is False; skipping action item persistence")
             else:
                 logger.info("[ANALYZE] no raw_items to save")
+            # action item 저장 안할 경우 문서만 커밋
             try:
                 db.commit()
             except Exception as e:
@@ -433,7 +411,7 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
                 raise RuntimeError(f"commit failed: {e}")
 
         # ------------------------
-        # 5) Action Item 요약 생성
+        # 5) Action Item 요약 생성 (UI 포맷)
         # ------------------------
         action_summary = {
             "open_total": 0,
@@ -445,6 +423,7 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
         }
 
         try:
+            # 프로젝트 전체 아이템을 기준으로 집계 (필요시 문서별로 제한 가능)
             items_q = db.query(pm_models.PM_ActionItem).filter(pm_models.PM_ActionItem.project_id == project_id)
             all_items = items_q.all()
             open_items = [i for i in all_items if (getattr(i, "status", None) or "Open") == "Open"]
@@ -508,6 +487,7 @@ async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         except Exception as e:
             logger.exception("[ANALYZE] Failed to build action summary: %s", e)
+            # 실패할 경우 빈 구조 유지
 
         # ------------------------
         # 6) 결과 조립
@@ -576,11 +556,32 @@ async def _report_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 #  Scope 핸들러
 # ===============================
 async def _scope_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    입력:
+      {
+        "project_id": "default",
+        "project_name": "Demo Project",
+        "methodology": "waterfall",
+        "documents": [{"path": "data/inputs/RFP/sample.pdf", "type": "RFP"}],
+        "options": {"chunk_size": 500, "overlap": 100}
+      }
+    출력:
+      {
+        "project_id": "default",
+        "wbs_json_path": "...",
+        "rtm_csv_path": "...",
+        "scope_md_path": "...",
+        "stats": {...}
+      }
+    """
     if not _SCOPE_AVAILABLE or ScopeAgent is None:
         raise RuntimeError("ScopeAgent not available. Check server/workflow/agents/scope_agent/pipeline.py")
 
     agent = ScopeAgent(data_dir=str(DATA_DIR))
+    
+    # ScopeAgent.pipeline()은 이미 비동기 함수
     result = await agent.pipeline(payload)
+    
     return result
 
 
@@ -599,6 +600,24 @@ async def _scope_summary_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 #  Schedule 핸들러
 # ===============================
 async def _schedule_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    입력:
+      {
+        "project_id": "default",
+        "wbs_json": "data/outputs/scope/default/wbs_structure.json",
+        "calendar": {"start_date": "2025-11-03", "work_week": [1,2,3,4,5], "holidays": []},
+        "resource_pool": [{"role": "PM", "capacity_pct": 80}],
+        "sprint_length_weeks": 2,
+        "estimation_mode": "llm",
+        "methodology": "waterfall"
+      }
+    출력:
+      {
+        "plan_csv": "...",
+        "gantt_json": "...",
+        "critical_path": [...]
+      }
+    """
     if not _SCHEDULE_AVAILABLE or ScheduleAgent is None:
         logger.warning("[SCHEDULE] ScheduleAgent not available; returning empty schedule")
         return {
@@ -611,6 +630,7 @@ async def _schedule_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     agent = ScheduleAgent(data_dir=str(DATA_DIR))
     result = await agent.pipeline(payload)
+    
     return result
 
 
@@ -628,26 +648,46 @@ async def _schedule_timeline_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 #  Workflow: Scope -> Schedule
 # ===============================
 async def _workflow_scope_then_schedule_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    입력:
+      {
+        "scope": { ... ScopeRequest ... },
+        "schedule": { ... ScheduleRequest ... }
+      }
+    OR 단순 payload (scope와 schedule을 자동 구성)
+    출력:
+      {
+        "scope": { ... scope 결과 ... },
+        "schedule": { ... schedule 결과 ... }
+      }
+    """
+    # 방법 1: scope/schedule이 명시적으로 분리된 경우
     if "scope" in payload and "schedule" in payload:
         scope_payload = payload["scope"]
         schedule_payload = payload["schedule"]
         
+        # Scope 실행
         scope_result = await _scope_handler(scope_payload)
         
-        wbs_json_path = scope_result.get("wbs_json_path") or scope_result.get("wbs_json")
+        # WBS 경로를 Schedule payload에 자동 주입
+        wbs_json_path = scope_result.get("wbs_json_path")
         if wbs_json_path:
             schedule_payload["wbs_json"] = wbs_json_path
         
+        # Schedule 실행
         schedule_result = await _schedule_handler(schedule_payload)
         
         return {
             "scope": scope_result,
             "schedule": schedule_result
         }
+    
+    # 방법 2: 단순 payload (Scope만 실행하고 Schedule은 준비)
     else:
         scope_result = await _scope_handler(payload)
-        wbs_json_path = scope_result.get("wbs_json_path") or scope_result.get("wbs_json")
+        wbs_json_path = scope_result.get("wbs_json_path")
         
+        # Schedule payload 자동 구성
         sched_payload = {
             "project_id": payload.get("project_id", "default"),
             "wbs_json": wbs_json_path
