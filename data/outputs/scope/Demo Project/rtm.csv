@@ -1,2 +1,3 @@
-req_id,text,type,category,source
-R001,[WARN] RFP not found: D:\workspace\pm-agent\data\inputs\RFP\data\inputs\RFP\3.B20250029-00_제안요청서.pdf,note,비기능,RFP
+req_id,wbs_id,wbs_name,test_case,verification_status
+,WBS-1,Project,,Candidate
+,WBS-1.1,Phase 1,,Candidate

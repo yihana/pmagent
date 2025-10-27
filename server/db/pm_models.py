@@ -162,6 +162,45 @@ class PM_Scope(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+#1023 Scope agent가 추출한 요구사항을 저장하고, RTM(Requirement-to-WBS/Test) 매핑을 유지하고, 변경요청(CR) 기록, CMP(변경영향분석) 시 사용
+class PM_Requirement(Base):
+    __tablename__ = "pm_requirements"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, index=True, nullable=False)
+    req_id = Column(String(50), nullable=False)   # REQ-001 등
+    title = Column(String(1000), nullable=False)
+    type = Column(String(50), nullable=True)  # functional/non-functional/constraint
+    priority = Column(String(20), nullable=True)
+    description = Column(Text, nullable=True)
+    source_doc = Column(String(1024), nullable=True)  # RFP path or doc id
+    status = Column(String(20), default="Draft")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class PM_ChangeRequest(Base):
+    __tablename__ = "pm_change_requests"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, index=True, nullable=False)
+    cr_no = Column(String(50), nullable=False)   # CR-001
+    title = Column(String(1000), nullable=False)
+    description = Column(Text, nullable=True)
+    requested_by = Column(String(100), nullable=True)
+    status = Column(String(50), default="Requested")  # Requested/Approved/Rejected/Implemented
+    impact = Column(JSON, nullable=True)  # { "tasks": [...], "reqs": [...], "est_days": N }
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class PM_RTM(Base):
+    __tablename__ = "pm_rtm"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, index=True, nullable=False)
+    req_id = Column(String(50), nullable=False)
+    wbs_id = Column(String(50), nullable=True)
+    test_case = Column(String(1000), nullable=True)
+    verification_status = Column(String(50), default="Unmapped")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # ✅ Schedule Agent 결과 저장
 class PM_Schedule(Base):
     __tablename__ = "pm_schedule"

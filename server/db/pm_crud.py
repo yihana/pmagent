@@ -4,8 +4,11 @@ from datetime import date, datetime
 from typing import Iterable, Optional, Sequence, Dict, Any
 from sqlalchemy.orm import Session
 from server.db import pm_models
-from server.db.database import get_db
+from server.db.database import get_db, SessionLocal
+import json
+import logging
 
+logger = logging.getLogger("pm.crud")
 
 # -------------------------
 # Project
@@ -146,6 +149,216 @@ def create_fup_item(
     )
     db.add(f)
     return f
+
+
+# server/db/pm_crud.py  (추가/병합)
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from sqlalchemy.orm import Session
+from server.db.database import SessionLocal
+from server.db import pm_models
+import json
+import logging
+
+logger = logging.getLogger("pm.crud")
+
+# -----------------------
+# Requirements CRUD
+# -----------------------
+def add_requirement(project_id: str, req_id: str, title: str, rtype: str = "functional",
+                    priority: str = "Medium", description: str = "", source_doc: Optional[str] = None) -> int:
+    db: Session = SessionLocal()
+    try:
+        rec = pm_models.PM_Requirement(
+            project_id=str(project_id),
+            req_id=req_id,
+            title=title,
+            type=rtype,
+            priority=priority,
+            description=description,
+            source_doc=source_doc,
+            status="Open",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(rec)
+        db.commit()
+        return rec.id
+    except Exception as e:
+        db.rollback()
+        logger.exception("add_requirement failed: %s", e)
+        raise
+    finally:
+        db.close()
+
+def upsert_requirement(project_id: str, req: Dict[str, Any]) -> int:
+    """
+    req dict must contain req_id
+    returns id
+    """
+    db: Session = SessionLocal()
+    try:
+        req_id = req.get("req_id") or req.get("id")
+        if not req_id:
+            raise ValueError("req_id required for upsert")
+
+        existing = db.query(pm_models.PM_Requirement).filter(
+            pm_models.PM_Requirement.project_id == str(project_id),
+            pm_models.PM_Requirement.req_id == req_id
+        ).one_or_none()
+
+        if existing:
+            existing.title = req.get("title") or existing.title
+            existing.type = req.get("type") or existing.type
+            existing.priority = req.get("priority") or existing.priority
+            existing.description = req.get("description") or existing.description
+            existing.source_doc = req.get("source_span") or existing.source_doc
+            existing.updated_at = datetime.utcnow()
+            db.commit()
+            return existing.id
+        else:
+            rec = pm_models.PM_Requirement(
+                project_id=str(project_id),
+                req_id=req_id,
+                title=req.get("title") or "",
+                type=req.get("type") or "functional",
+                priority=req.get("priority") or "Medium",
+                description=req.get("description") or "",
+                source_doc=req.get("source_span") or None,
+                status=req.get("status") or "Open",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(rec)
+            db.commit()
+            return rec.id
+    except Exception as e:
+        db.rollback()
+        logger.exception("upsert_requirement failed: %s", e)
+        raise
+    finally:
+        db.close()
+
+def list_requirements(project_id: str) -> List[Dict[str, Any]]:
+    db: Session = SessionLocal()
+    try:
+        rows = db.query(pm_models.PM_Requirement).filter(pm_models.PM_Requirement.project_id == str(project_id)).all()
+        return [ {
+            "id": r.id,
+            "req_id": r.req_id,
+            "title": r.title,
+            "type": r.type,
+            "priority": r.priority,
+            "description": r.description,
+            "source_doc": r.source_doc,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None
+        } for r in rows ]
+    finally:
+        db.close()
+
+# -----------------------
+# RTM CRUD
+# -----------------------
+def add_rtm_entry(project_id: str, req_id: Optional[str], wbs_id: str,
+                  test_case: Optional[str] = None, verification_status: str = "Candidate") -> int:
+    db: Session = SessionLocal()
+    try:
+        rec = pm_models.PM_RTM(
+            project_id=str(project_id),
+            req_id=req_id,
+            wbs_id=wbs_id,
+            test_case=test_case,
+            verification_status=verification_status,
+            created_at=datetime.utcnow()
+        )
+        db.add(rec)
+        db.commit()
+        return rec.id
+    except Exception as e:
+        db.rollback()
+        logger.exception("add_rtm_entry failed: %s", e)
+        raise
+    finally:
+        db.close()
+
+def list_rtm(project_id: str) -> List[Dict[str, Any]]:
+    db: Session = SessionLocal()
+    try:
+        rows = db.query(pm_models.PM_RTM).filter(pm_models.PM_RTM.project_id == str(project_id)).all()
+        return [ {
+            "id": r.id,
+            "req_id": r.req_id,
+            "wbs_id": r.wbs_id,
+            "test_case": r.test_case,
+            "verification_status": r.verification_status,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        } for r in rows ]
+    finally:
+        db.close()
+
+# -----------------------
+# 1023 Change Request CRUD
+# -----------------------
+def create_change_request(project_id: str, cr_no: str, title: str, description: str,
+                          requested_by: str, impact: Optional[Dict[str, Any]] = None) -> int:
+    db: Session = SessionLocal()
+    try:
+        rec = pm_models.PM_ChangeRequest(
+            project_id=str(project_id),
+            cr_no=cr_no,
+            title=title,
+            description=description,
+            requested_by=requested_by,
+            status="Requested",
+            impact=impact or {},
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(rec)
+        db.commit()
+        return rec.id
+    except Exception as e:
+        db.rollback()
+        logger.exception("create_change_request failed: %s", e)
+        raise
+    finally:
+        db.close()
+
+def list_change_requests(project_id: str) -> List[Dict[str, Any]]:
+    db: Session = SessionLocal()
+    try:
+        rows = db.query(pm_models.PM_ChangeRequest).filter(pm_models.PM_ChangeRequest.project_id == str(project_id)).all()
+        return [ {
+            "id": r.id,
+            "cr_no": r.cr_no,
+            "title": r.title,
+            "requested_by": r.requested_by,
+            "status": r.status,
+            "impact": r.impact,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None
+        } for r in rows ]
+    finally:
+        db.close()
+
+def update_change_request_status(cr_id: int, status: str) -> bool:
+    db: Session = SessionLocal()
+    try:
+        rec = db.query(pm_models.PM_ChangeRequest).filter(pm_models.PM_ChangeRequest.id == int(cr_id)).one_or_none()
+        if not rec:
+            return False
+        rec.status = status
+        rec.updated_at = datetime.utcnow()
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.exception("update_change_request_status failed: %s", e)
+        raise
+    finally:
+        db.close()
 
 
 # -------------------------

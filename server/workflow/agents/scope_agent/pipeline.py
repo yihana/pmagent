@@ -1,28 +1,67 @@
+# server/workflow/agents/scope_agent/pipeline.py (버그 수정)
 import json
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+import logging
+import csv
+import copy
+import re
+
+logger = logging.getLogger("scope.agent")
+
+# LLM import
+try:
+    from server.utils.config import get_llm
+    _HAS_LLM = True
+except Exception:
+    get_llm = None
+    _HAS_LLM = False
+
+# DB models
+try:
+    from server.db.database import SessionLocal
+    from server.db import pm_models
+    _HAS_DB = True
+except Exception as e:
+    logger.warning("[ScopeAgent] DB import failed: %s", e)
+    SessionLocal = None
+    pm_models = None
+    _HAS_DB = False
+
+# ✅ 프롬프트 import (fallback 포함)
+try:
+    from .prompts import SCOPE_EXTRACT_PROMPT, RTM_PROMPT
+except Exception:
+    # Fallback 프롬프트
+    SCOPE_EXTRACT_PROMPT = """
+당신은 PMP 표준을 준수하는 PMO 분석가입니다.
+아래 문서에서 요구사항, 기능, 산출물, 승인기준을 추출하세요.
+
+출력 JSON:
+{{
+  "requirements": [{{"req_id":"REQ-001","title":"...","type":"functional","priority":"High","description":"...","source_span":"..."}}],
+  "functions": [...],
+  "deliverables": [...],
+  "acceptance_criteria": [...]
+}}
+
+문서:
+{context}
+"""
+    RTM_PROMPT = "RTM mapping for requirements: {requirements}"
 
 
 def _find_root(start: Path) -> Path:
-    """프로젝트 루트 찾기 (data 폴더가 있는 위치)"""
     for p in start.parents:
         if (p / "data").exists():
             return p
-    return start.parents[4]
+    return start.parents[4] if len(start.parents) >= 5 else start.parent
 
 
 class ScopeAgent:
-    """
-    RFP 문서로부터 Scope Statement, RTM, WBS를 생성하는 Agent
-    
-    Pipeline:
-        1. ingest: RFP 텍스트 로드
-        2. extract_items: 요구사항 추출
-        3. synthesize_wbs: WBS 구조 생성
-        4. write_outputs: 파일로 저장 (JSON/CSV/MD)
-        5. generate_pmp_outputs: PMP 표준 산출물 생성 (Excel/Word)
-    """
+    """Scope Management Agent (PMP 5.0)"""
     
     def __init__(self, data_dir: Optional[str] = None):
         here = Path(__file__).resolve()
@@ -34,7 +73,7 @@ class ScopeAgent:
         self.OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     async def pipeline(self, payload: Any) -> Dict[str, Any]:
-        """메인 파이프라인 실행"""
+        """Scope Agent 파이프라인"""
         if not isinstance(payload, dict):
             if hasattr(payload, "model_dump"):
                 payload = payload.model_dump()
@@ -43,234 +82,434 @@ class ScopeAgent:
             else:
                 payload = {}
 
-        # project_id 추출
-        project_id = payload.get("project_id")
-        if not project_id:
-            project_id = payload.get("project_name", "default")
-        
-        # documents 배열에서 첫 번째 문서 경로 추출
+        project_id = payload.get("project_id") or payload.get("project_name") or "default"
         documents = payload.get("documents", [])
-        text = payload.get("text")
-        rfp_filename = None
-        
-        if documents and len(documents) > 0:
-            first_doc = documents[0]
-            if isinstance(first_doc, dict):
-                rfp_filename = first_doc.get("path")
-            else:
-                rfp_filename = getattr(first_doc, "path", None)
-        
-        depth = int(payload.get("options", {}).get("wbs_depth", 3))
-        methodology = payload.get("methodology", "waterfall")
+        text_input = payload.get("text")
+        methodology = (payload.get("methodology") or "waterfall").lower()
 
-        # 기존 파이프라인
-        raw = await self._ingest(text, rfp_filename)
-        items = await self._extract_items(raw)
-        wbs = await self._synthesize_wbs(items, depth)
-        paths = await self._write_outputs(project_id, raw, items, wbs)
-        
-        # ✅ PMP 표준 산출물 생성
-        pmp_outputs = await self._generate_pmp_outputs(
-            project_id=project_id,
-            project_dir=paths["project_dir"],
-            wbs_data=wbs,
-            requirements=items,
-            methodology=methodology
-        )
-        
-        return {
-            "status": "ok",
-            "project_id": project_id,
-            # 기존 산출물
-            "wbs_json": str(paths["wbs_json"]),
-            "rtm_csv": str(paths["rtm_csv"]),
-            "scope_statement_md": str(paths["scope_md"]),
-            # ✅ PMP 산출물
-            **pmp_outputs,
-            "stats": {
-                "items": len(items), 
-                "wbs_nodes": len(wbs.get("nodes", []))
-            },
-        }
-
-    async def _ingest(self, text: Optional[str], rfp_filename: Optional[str]) -> str:
-        """RFP 텍스트 로드"""
-        if text:
-            return text
-        if rfp_filename:
-            # 상대경로/절대경로 처리
-            if Path(rfp_filename).is_absolute():
-                pdf = Path(rfp_filename)
-            else:
-                pdf = self.INPUT_RFP_DIR / rfp_filename
-            
-            if pdf.exists():
-                return f"RFP: {pdf.name}\n\nOverview\nRequirements\nDeliverables"
-            else:
-                return f"[WARN] RFP not found: {pdf}"
-        return "No input provided."
-
-    async def _extract_items(self, raw: str) -> List[Dict[str, Any]]:
-        """요구사항 추출 (간단한 줄 단위 파싱)"""
-        items = []
-        for i, ln in enumerate([l.strip() for l in raw.splitlines() if l.strip()], 1):
-            items.append({
-                "id": f"R{i:03d}",
-                "text": ln,
-                "type": "req" if "require" in ln.lower() else "note",
-                "category": "기능" if "기능" in ln else "비기능",
-                "source": "RFP"
-            })
-        await asyncio.sleep(0)
-        return items
-
-    async def _synthesize_wbs(self, items: List[Dict[str, Any]], depth: int) -> Dict[str, Any]:
-        """WBS 구조 생성"""
-        nodes = [{
-            "id": "WBS-1", 
-            "name": "Project", 
-            "level": 1, 
-            "children": [],
-            "deliverables": "프로젝트 완료",
-            "owner": "PM"
-        }]
-        
-        phases = [
-            {
-                "id": f"WBS-1.{i}", 
-                "name": f"Phase {i}", 
-                "level": 2, 
-                "children": [],
-                "owner": "PM",
-                "deliverables": f"Phase {i} 산출물"
-            } 
-            for i in range(1, 4)
-        ]
-        nodes[0]["children"] = phases
-        
-        t = 0
-        for p in phases:
-            for j in range(1, 4):
-                t += 1
-                p["children"].append({
-                    "id": f"{p['id']}.{j}",
-                    "name": f"Task {t}",
-                    "level": 3,
-                    "owner": "개발팀",
-                    "deliverables": f"Task {t} 결과물",
-                    "duration_md": "5",
-                    "headcount": "2"
-                })
-        
-        return {"nodes": nodes, "depth": max(1, min(depth, 3))}
-
-    async def _write_outputs(
-        self, 
-        project_id: Any, 
-        raw: str, 
-        items: List[Dict[str, Any]], 
-        wbs: Dict[str, Any]
-    ) -> Dict[str, Path]:
-        """기존 결과 파일 저장 (JSON/CSV/MD)"""
+        # Ensure output project dir
         proj_dir = self.OUT_DIR / str(project_id)
         proj_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1) Ingest RFP
+        raw_text, rfp_path = await self._ingest(text_input, documents)
         
-        # WBS JSON
-        wbs_json = proj_dir / "wbs_structure.json"
-        wbs_json.write_text(
-            json.dumps(wbs, ensure_ascii=False, indent=2), 
+        if not raw_text or not raw_text.strip():
+            return {
+                "status": "error",
+                "message": "No RFP text provided",
+                "project_id": project_id
+            }
+
+        # 2) Extract items
+        logger.info(f"[SCOPE] Extracting requirements for project {project_id}")
+        items = await self._extract_items(raw_text, project_id)
+
+        # 3) Save requirements to DB
+        if _HAS_DB and pm_models is not None and items.get("requirements"):
+            try:
+                await asyncio.to_thread(
+                    self._save_requirements_db, 
+                    project_id, 
+                    items["requirements"]
+                )
+                logger.info(f"[SCOPE] Saved {len(items['requirements'])} requirements to DB")
+            except Exception as e:
+                logger.exception("save_requirements_db failed: %s", e)
+
+        # 4) Generate SRS
+        srs_path = proj_dir / "SRS.md"
+        try:
+            await asyncio.to_thread(self._generate_srs, project_id, items, srs_path)
+            logger.info(f"[SCOPE] Generated SRS: {srs_path}")
+        except Exception as e:
+            logger.exception("SRS generation failed: %s", e)
+            srs_path = None
+
+        # 5) Initialize RTM (requirements only, WBS will be done by Schedule Agent)
+        rtm_json = {"mappings": []}
+        rtm_csv_path = proj_dir / "rtm_initial.csv"
+        try:
+            rtm_json = await self._initialize_rtm(items, rtm_csv_path, project_id)
+            logger.info(f"[SCOPE] Initialized RTM: {rtm_csv_path}")
+        except Exception as e:
+            logger.exception("RTM initialization failed: %s", e)
+
+        # 6) Generate project documents
+        charter_path = proj_dir / "project_charter.md"
+        business_plan_path = proj_dir / "business_plan.md"
+        try:
+            await asyncio.to_thread(
+                self._generate_project_documents, 
+                project_id, 
+                items, 
+                charter_path, 
+                business_plan_path
+            )
+        except Exception as e:
+            logger.exception("project doc generation failed: %s", e)
+
+        # 7) Write requirements JSON
+        requirements_json_path = proj_dir / "requirements.json"
+        requirements_json_path.write_text(
+            json.dumps(items, ensure_ascii=False, indent=2), 
             encoding="utf-8"
         )
-        
-        # RTM CSV
-        rtm_csv = proj_dir / "rtm.csv"
-        with open(rtm_csv, "w", encoding="utf-8", newline="") as f:
-            f.write("req_id,text,type,category,source\n")
-            for it in items:
-                text_safe = it['text'].replace(',', ';').replace('\n', ' ')
-                f.write(f"{it['id']},{text_safe},{it['type']},{it.get('category','')},{it.get('source','')}\n")
-        
-        # Scope Statement Markdown
-        scope_md = proj_dir / "scope_statement.md"
-        with open(scope_md, "w", encoding="utf-8") as f:
-            f.write("# Scope Statement\n\n")
-            f.write("## Overview\n\n")
-            f.write(raw + "\n\n")
-            f.write("## WBS\n\n")
-            f.write("```json\n")
-            f.write(json.dumps(wbs, ensure_ascii=False, indent=2))
-            f.write("\n```\n")
-        
-        return {
-            "project_dir": proj_dir,
-            "wbs_json": wbs_json,
-            "rtm_csv": rtm_csv,
-            "scope_md": scope_md
+
+        # 8) Generate PMP outputs
+        pmp_outputs = {}
+        try:
+            pmp_outputs = await asyncio.to_thread(
+                self._generate_pmp_outputs, 
+                project_id, 
+                proj_dir, 
+                items
+            )
+        except Exception as e:
+            logger.exception("PMP outputs generation failed: %s", e)
+
+        # ✅ None 값 필터링 (Pydantic validation 통과용)
+        pmp_outputs_filtered = {k: v for k, v in pmp_outputs.items() if v is not None}
+
+        # Final output
+        scope_out = {
+            "status": "ok",
+            "project_id": project_id,
+            "requirements_json": str(requirements_json_path),
+            "requirements": items.get("requirements", []),
+            "functions": items.get("functions", []),
+            "deliverables": items.get("deliverables", []),
+            "acceptance_criteria": items.get("acceptance_criteria", []),
+            "rtm_json": rtm_json,
+            "rtm_csv": str(rtm_csv_path) if rtm_csv_path.exists() else None,
+            "srs_path": str(srs_path) if srs_path and Path(srs_path).exists() else None,
+            "charter_path": str(charter_path) if charter_path.exists() else None,
+            "business_plan_path": str(business_plan_path) if business_plan_path.exists() else None,
+            "pmp_outputs": pmp_outputs_filtered,  # ✅ 필터링된 결과
+            "stats": {
+                "requirements": len(items.get("requirements", [])),
+                "functions": len(items.get("functions", [])),
+                "deliverables": len(items.get("deliverables", [])),
+                "acceptance_criteria": len(items.get("acceptance_criteria", []))
+            },
+            "message": "Requirements extracted. Pass to Schedule Agent for WBS generation."
         }
 
-    async def _generate_pmp_outputs(
-        self,
-        project_id: str,
-        project_dir: Path,
-        wbs_data: Dict,
-        requirements: List[Dict],
-        methodology: str
-    ) -> Dict[str, str]:
-        """PMP 표준 산출물 일괄 생성"""
-        from .outputs.wbs_excel import WBSExcelGenerator
-        from .outputs.rtm_excel import RTMExcelGenerator
-        from .outputs.scope_statement import ScopeStatementGenerator
-        from .outputs.project_charter import ProjectCharterGenerator
-        from .outputs.tailoring import TailoringGenerator
+        return scope_out
+
+    # -------------------------
+    # Helper methods
+    # -------------------------
+    
+    async def _ingest(
+        self, 
+        text: Optional[str], 
+        documents: List[Dict[str, Any]]
+    ) -> Tuple[str, Optional[str]]:
+        """Load RFP text"""
+        if text and isinstance(text, str) and text.strip():
+            return text, None
+            
+        if documents and len(documents) > 0:
+            first = documents[0]
+            path = first.get("path") if isinstance(first, dict) else getattr(first, "path", None)
+            if path:
+                p = Path(path)
+                if not p.is_absolute():
+                    p = self.INPUT_RFP_DIR / p
+                if p.exists():
+                    try:
+                        if p.suffix.lower() in (".txt", ".md"):
+                            return p.read_text(encoding="utf-8"), str(p)
+                        else:
+                            return f"[RFP file: {p.name}] (extraction not implemented)", str(p)
+                    except Exception as e:
+                        logger.exception("ingest read failed: %s", e)
+                        return f"[WARN] could not read: {p}", str(p)
+        return ("", None)
+
+    async def _extract_items(
+        self, 
+        raw_text: str, 
+        project_id: Any
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Extract structured requirements"""
+        if _HAS_LLM and get_llm is not None and raw_text and raw_text.strip():
+            prompt = SCOPE_EXTRACT_PROMPT.format(context=raw_text)
+            try:
+                llm = get_llm()
+                def call_llm():
+                    return llm.generate(prompt) if hasattr(llm, "generate") else llm(prompt)
+                
+                resp = await asyncio.to_thread(call_llm)
+                text_out = resp if isinstance(resp, str) else getattr(resp, "text", str(resp))
+                
+                # Extract JSON
+                m = re.search(r"(\{.*\})", text_out, re.S)
+                jtxt = m.group(1) if m else text_out
+                data = json.loads(jtxt)
+                
+                # Ensure all keys
+                for k in ("requirements", "functions", "deliverables", "acceptance_criteria"):
+                    if k not in data:
+                        data[k] = []
+                return data
+                
+            except Exception as e:
+                logger.exception("LLM extraction failed: %s – falling back", e)
         
+        # Fallback
+        return self._fallback_extract(raw_text)
+
+    def _fallback_extract(self, raw_text: str) -> Dict[str, List[Dict[str, Any]]]:
+        """Naive keyword-based extraction"""
+        reqs = []
+        funcs = []
+        dels = []
+        acc = []
+        idx = 1
+        
+        for para in [p.strip() for p in raw_text.split("\n\n") if p.strip()]:
+            low = para.lower()
+            
+            if any(k in low for k in ("require", "요구", "must", "shall")):
+                reqs.append({
+                    "req_id": f"REQ-{idx:03d}",
+                    "title": para[:80],
+                    "type": "functional" if any(w in low for w in ("function", "feature", "기능")) else "non-functional",
+                    "priority": "Medium",
+                    "description": para,
+                    "source_span": "RFP"
+                })
+                idx += 1
+                
+            elif any(k in low for k in ("feature", "function", "기능")):
+                funcs.append({
+                    "id": f"FUNC-{idx:03d}",
+                    "title": para[:80],
+                    "description": para
+                })
+                idx += 1
+                
+            elif any(k in low for k in ("deliverable", "산출물")):
+                dels.append({
+                    "id": f"DEL-{idx:03d}",
+                    "title": para[:80],
+                    "description": para
+                })
+                idx += 1
+                
+            elif any(k in low for k in ("acceptance", "승인", "criteria", "검증")):
+                acc.append({
+                    "id": f"ACC-{idx:03d}",
+                    "title": para[:80],
+                    "description": para
+                })
+                idx += 1
+                
+        return {
+            "requirements": reqs,
+            "functions": funcs,
+            "deliverables": dels,
+            "acceptance_criteria": acc
+        }
+
+    def _save_requirements_db(
+        self, 
+        project_id: Any, 
+        requirements: List[Dict[str, Any]]
+    ):
+        """Insert or update PM_Requirement rows"""
+        if not _HAS_DB or pm_models is None:
+            logger.info("DB not available; skipping requirement save")
+            return
+            
+        db = SessionLocal()
+        try:
+            for r in requirements:
+                req_id = r.get("req_id") or r.get("id")
+                if not req_id:
+                    continue
+                    
+                existing = db.query(pm_models.PM_Requirement).filter(
+                    pm_models.PM_Requirement.req_id == req_id,
+                    pm_models.PM_Requirement.project_id == str(project_id)
+                ).one_or_none()
+                
+                if existing:
+                    existing.title = r.get("title") or existing.title
+                    existing.type = r.get("type") or existing.type
+                    existing.priority = r.get("priority") or existing.priority
+                    existing.description = r.get("description") or existing.description
+                    existing.source_doc = r.get("source_span") or existing.source_doc
+                    existing.updated_at = datetime.utcnow()
+                else:
+                    rec = pm_models.PM_Requirement(
+                        project_id=str(project_id),
+                        req_id=req_id,
+                        title=r.get("title") or "",
+                        type=r.get("type") or "functional",
+                        priority=r.get("priority") or "Medium",
+                        description=r.get("description") or "",
+                        source_doc=r.get("source_span"),
+                        status="Open",
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.add(rec)
+            db.commit()
+            
+        except Exception as e:
+            logger.exception("Saving requirements failed: %s", e)
+            db.rollback()
+        finally:
+            db.close()
+
+    async def _initialize_rtm(
+        self, 
+        items: Dict[str, Any], 
+        csv_path: Path, 
+        project_id: Any
+    ) -> Dict[str, Any]:
+        """Initialize RTM with requirements only"""
+        mappings = []
+        reqs = items.get("requirements", [])
+        
+        for r in reqs:
+            mappings.append({
+                "req_id": r.get("req_id"),
+                "title": r.get("title"),
+                "type": r.get("type"),
+                "priority": r.get("priority"),
+                "wbs_id": "",
+                "test_case": "",
+                "verification_status": "Pending WBS"
+            })
+        
+        # Write CSV
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                "req_id", "title", "type", "priority", 
+                "wbs_id", "test_case", "verification_status"
+            ])
+            writer.writeheader()
+            for m in mappings:
+                writer.writerow(m)
+        
+        # ✅ DB 저장시 req_id가 None인 경우 스킵
+        if _HAS_DB and pm_models is not None:
+            db = SessionLocal()
+            try:
+                # Delete existing
+                db.query(pm_models.PM_RTM).filter(
+                    pm_models.PM_RTM.project_id == str(project_id)
+                ).delete()
+                
+                for m in mappings:
+                    req_id = m.get("req_id")
+                    # ✅ req_id가 None이거나 빈 문자열이면 스킵
+                    if not req_id or req_id == "":
+                        logger.warning(f"Skipping RTM entry with empty req_id: {m}")
+                        continue
+                    
+                    rec = pm_models.PM_RTM(
+                        project_id=str(project_id),
+                        req_id=req_id,
+                        wbs_id=m.get("wbs_id") or None,
+                        test_case=m.get("test_case") or None,
+                        verification_status=m.get("verification_status") or "Candidate",
+                        created_at=datetime.utcnow()
+                    )
+                    db.add(rec)
+                db.commit()
+            except Exception as e:
+                logger.exception("Saving RTM to DB failed: %s", e)
+                db.rollback()
+            finally:
+                db.close()
+        
+        return {"mappings": mappings}
+
+    def _generate_srs(
+        self, 
+        project_id: Any, 
+        items: Dict[str, Any], 
+        out_path: Path
+    ):
+        """Generate SRS"""
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(f"# Software Requirements Specification\n")
+            f.write(f"**Project:** {project_id}\n")
+            f.write(f"**Generated:** {datetime.utcnow().isoformat()}\n\n")
+            
+            f.write("## 1. Requirements\n\n")
+            for r in items.get("requirements", []):
+                f.write(f"### {r.get('req_id')}: {r.get('title')}\n")
+                f.write(f"- **Type:** {r.get('type')}\n")
+                f.write(f"- **Priority:** {r.get('priority')}\n")
+                f.write(f"- **Description:** {r.get('description')}\n")
+                f.write(f"- **Source:** {r.get('source_span')}\n\n")
+            
+            f.write("## 2. Functions\n\n")
+            for fn in items.get("functions", []):
+                f.write(f"- **{fn.get('id')}:** {fn.get('title')}\n")
+            
+            f.write("\n## 3. Deliverables\n\n")
+            for d in items.get("deliverables", []):
+                f.write(f"- **{d.get('id')}:** {d.get('title')}\n")
+            
+            f.write("\n## 4. Acceptance Criteria\n\n")
+            for a in items.get("acceptance_criteria", []):
+                f.write(f"- **{a.get('id')}:** {a.get('title')}\n")
+        
+        return str(out_path)
+
+    def _generate_project_documents(
+        self, 
+        project_id: Any, 
+        items: Dict[str, Any], 
+        charter_path: Path, 
+        business_path: Path
+    ):
+        """Generate project charter and business plan"""
+        charter_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(charter_path, "w", encoding="utf-8") as f:
+            f.write(f"# Project Charter\n")
+            f.write(f"**Project ID:** {project_id}\n")
+            f.write(f"**Date:** {datetime.utcnow().date().isoformat()}\n\n")
+            f.write("## Project Purpose\n\n")
+            f.write("## Objectives\n\n")
+            f.write("## Success Criteria\n\n")
+        
+        with open(business_path, "w", encoding="utf-8") as f:
+            f.write(f"# Business Plan\n")
+            f.write(f"**Project ID:** {project_id}\n")
+            f.write(f"**Date:** {datetime.utcnow().date().isoformat()}\n\n")
+            f.write("## Business Case\n\n")
+            f.write("## ROI Analysis\n\n")
+        
+        return str(charter_path), str(business_path)
+
+    def _generate_pmp_outputs(
+        self, 
+        project_id: Any, 
+        project_dir: Path, 
+        requirements: Dict[str, Any]
+    ) -> Dict[str, Optional[str]]:
+        """Generate PMP standard outputs"""
         outputs = {}
         
         try:
-            # 1. WBS Excel
-            wbs_excel_path = project_dir / f"{project_id}_WBS.xlsx"
-            outputs["wbs_excel"] = WBSExcelGenerator.generate(wbs_data, wbs_excel_path)
-        except Exception as e:
-            outputs["wbs_excel"] = f"Error: {e}"
-        
-        try:
-            # 2. RTM Excel
-            rtm_excel_path = project_dir / f"{project_id}_요구사항추적표.xlsx"
-            outputs["rtm_excel"] = RTMExcelGenerator.generate(requirements, rtm_excel_path)
-        except Exception as e:
-            outputs["rtm_excel"] = f"Error: {e}"
-        
-        try:
-            # 3. 범위기술서 Excel
-            scope_excel_path = project_dir / f"{project_id}_범위기술서.xlsx"
+            from .outputs.scope_statement import ScopeStatementGenerator
+            scp = project_dir / f"{project_id}_ScopeStatement.xlsx"
             outputs["scope_statement_excel"] = ScopeStatementGenerator.generate(
-                project_name=project_id,
-                wbs_data=wbs_data,
-                requirements=requirements,
-                output_path=scope_excel_path
+                project_id, requirements, scp
             )
         except Exception as e:
-            outputs["scope_statement_excel"] = f"Error: {e}"
-        
-        try:
-            # 4. 프로젝트 헌장 Word
-            charter_path = project_dir / f"{project_id}_프로젝트헌장.docx"
-            outputs["project_charter_docx"] = ProjectCharterGenerator.generate(
-                project_name=project_id,
-                requirements=requirements,
-                wbs_data=wbs_data,
-                output_path=charter_path
-            )
-        except Exception as e:
-            outputs["project_charter_docx"] = f"Error: {e}"
-        
-        try:
-            # 5. 테일러링 Excel
-            tailoring_path = project_dir / f"{project_id}_테일러링.xlsx"
-            outputs["tailoring_excel"] = TailoringGenerator.generate(
-                methodology=methodology,
-                output_path=tailoring_path
-            )
-        except Exception as e:
-            outputs["tailoring_excel"] = f"Error: {e}"
+            outputs["scope_statement_excel"] = None
+            logger.debug("ScopeStatementGenerator not available: %s", e)
         
         return outputs

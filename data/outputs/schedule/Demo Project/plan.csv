@@ -1,1 +1,3 @@
-
+EF,ES,Float,duration,end,id,name,predecessors,start,story_points
+1,0,1.0,1,2025-10-28,WBS-1,Project,,2025-10-27,
+2,0,0.0,2,2025-10-29,WBS-1.1,Phase 1,,2025-10-27,

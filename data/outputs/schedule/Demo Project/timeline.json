@@ -1,4 +1,17 @@
 {
   "project_id": "Demo Project",
-  "tasks": []
+  "tasks": [
+    {
+      "id": "WBS-1",
+      "name": "Project",
+      "ES": 0,
+      "EF": 1
+    },
+    {
+      "id": "WBS-1.1",
+      "name": "Phase 1",
+      "ES": 0,
+      "EF": 2
+    }
+  ]
 }
