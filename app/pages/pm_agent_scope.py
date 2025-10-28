@@ -1,5 +1,6 @@
 # app/pages/pm_scope.py
-# Scope Agent 전용 페이지 (수정됨)
+# Scope Agent 전용 페이지 (라디오=폼 밖 / 나머지 기능 원복)
+
 import streamlit as st
 import requests
 import json
@@ -10,13 +11,22 @@ API_BASE = st.secrets.get("API_BASE", "http://127.0.0.1:8001/api/v1/pm")
 st.title("🔎 Scope Agent — RFP 분석")
 
 # ✅ 세션 상태 초기화
-if "uploaded_path" not in st.session_state:
-    st.session_state["uploaded_path"] = ""
-if "sample_rfp" not in st.session_state:
-    st.session_state["sample_rfp"] = ""
+st.session_state.setdefault("uploaded_path", "")
+st.session_state.setdefault("sample_rfp", "")
 
 # ============================================
-# 1. 입력 폼
+# 0. RFP 입력 방식 라디오 (폼 밖: 즉시 반응)
+# ============================================
+st.markdown("### RFP 입력 방법")
+input_method = st.radio(
+    "선택",
+    ["직접 입력", "서버 파일 경로"],
+    horizontal=True,
+    key="input_method_radio"
+)
+
+# ============================================
+# 1. 입력 폼 (원복)
 # ============================================
 with st.form("scope_form"):
     st.markdown("### 프로젝트 정보")
@@ -26,13 +36,7 @@ with st.form("scope_form"):
     with col2:
         methodology = st.selectbox("방법론", ["waterfall", "agile"], index=0)
     
-    st.markdown("### RFP 입력 방법")
-    input_method = st.radio(
-        "선택",
-        ["직접 입력", "서버 파일 경로"],
-        horizontal=True
-    )
-    
+    st.markdown("### RFP 입력")
     if input_method == "직접 입력":
         # ✅ 세션에 샘플이 있으면 자동으로 채워짐
         default_text = st.session_state.get("sample_rfp", "")
@@ -69,7 +73,7 @@ with st.form("scope_form"):
     submitted = st.form_submit_button("🔎 Scope 추출 실행", type="primary")
 
 # ============================================
-# 2. Scope 실행
+# 2. Scope 실행 (원복)
 # ============================================
 if submitted:
     # ✅ 입력 검증
@@ -98,7 +102,7 @@ if submitted:
             "options": {"chunk_size": chunk_size, "overlap": overlap}
         }
     
-    st.info("📤 요청 전송 중...")
+    st.info(f"📤 요청 전송 중… {API_BASE}/scope/analyze")
     
     try:
         with st.spinner("Scope Agent 실행 중... (최대 3분 소요)"):
@@ -107,7 +111,11 @@ if submitted:
                 json=payload, 
                 timeout=180
             )
-            data = resp.json()
+            # 응답이 JSON 아닐 수도 있으니 보호
+            try:
+                data = resp.json()
+            except Exception:
+                data = {"raw": resp.text}
     except requests.exceptions.Timeout:
         st.error("❌ 요청 시간 초과 (3분). 서버를 확인하세요.")
         st.stop()
@@ -116,7 +124,7 @@ if submitted:
         st.stop()
     
     # ============================================
-    # 3. 결과 표시
+    # 3. 결과 표시 (원복)
     # ============================================
     if resp.status_code == 200:
         st.success("✅ Scope 추출 완료")
@@ -139,10 +147,10 @@ if submitted:
             
             # 테이블로 표시
             for req in filtered:
-                with st.expander(f"**{req.get('req_id')}**: {req.get('title')} `[{req.get('priority')}]`"):
-                    st.markdown(f"**유형**: {req.get('type')}")
-                    st.markdown(f"**설명**: {req.get('description')}")
-                    st.markdown(f"**출처**: {req.get('source_span')}")
+                with st.expander(f"**{req.get('req_id','REQ')}**: {req.get('title','')} `[{req.get('priority','')}]`"):
+                    st.markdown(f"**유형**: {req.get('type','')}")
+                    st.markdown(f"**설명**: {req.get('description','')}")
+                    st.markdown(f"**출처**: {req.get('source_span','')}")
         else:
             st.warning("⚠️ 추출된 요구사항이 없습니다.")
         
@@ -151,21 +159,21 @@ if submitted:
         if functions:
             with st.expander(f"🔧 기능 목록 ({len(functions)}개)"):
                 for func in functions:
-                    st.markdown(f"- **{func.get('id')}**: {func.get('title')}")
+                    st.markdown(f"- **{func.get('id','')}**: {func.get('title','')}")
         
         # ✅ 산출물 표시
         deliverables = data.get("deliverables", [])
         if deliverables:
             with st.expander(f"📦 산출물 목록 ({len(deliverables)}개)"):
                 for deliv in deliverables:
-                    st.markdown(f"- **{deliv.get('id')}**: {deliv.get('title')}")
+                    st.markdown(f"- **{deliv.get('id','')}**: {deliv.get('title','')}")
         
         # ✅ 승인기준 표시
         acceptance = data.get("acceptance_criteria", [])
         if acceptance:
             with st.expander(f"✅ 승인기준 ({len(acceptance)}개)"):
                 for acc in acceptance:
-                    st.markdown(f"- **{acc.get('id')}**: {acc.get('title')}")
+                    st.markdown(f"- **{acc.get('id','')}**: {acc.get('title','')}")
         
         # ============================================
         # 4. 생성된 파일
@@ -222,14 +230,18 @@ if submitted:
     
     elif resp.status_code == 400:
         st.error(f"❌ 요청 오류 (400): {data.get('detail', 'Unknown error')}")
-        st.code(json.dumps(data, indent=2))
+        st.code(json.dumps(data, indent=2, ensure_ascii=False))
     
     else:
         st.error(f"❌ 서버 오류 ({resp.status_code})")
-        st.code(resp.text)
+        # JSON이 아닐 수 있으므로 안전 출력
+        try:
+            st.code(json.dumps(data, indent=2, ensure_ascii=False))
+        except Exception:
+            st.code(resp.text)
 
 # ============================================
-# 6. 파일 업로드 (사이드바)
+# 6. 파일 업로드 (사이드바) — 원복
 # ============================================
 with st.sidebar:
     st.markdown("### 📤 파일 업로드")
@@ -263,9 +275,10 @@ with st.sidebar:
             if res.status_code == 200:
                 result = res.json()
                 path = result.get("path")
-                st.success(f"✅ 업로드 완료")
+                st.success("✅ 업로드 완료")
                 st.code(path)
                 st.info("📋 위 경로를 복사하여 '서버 파일 경로'에 입력하세요.")
+                # 필요 시: st.session_state["uploaded_path"] = path
             else:
                 st.error(f"❌ 업로드 실패 ({res.status_code})")
                 st.code(res.text)
@@ -332,6 +345,8 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"API: {API_BASE}")
 
-# ✅ 샘플 RFP 자동 입력
-if "sample_rfp" in st.session_state and input_method == "직접 입력":
-    st.info("💡 샘플 RFP가 준비되었습니다. 폼에서 '직접 입력'을 선택하고 제출하세요.")
+# ✅ 샘플/업로드 상태 안내 (선택)
+if st.session_state.get("uploaded_path"):
+    st.info(f"📁 업로드된 파일: `{st.session_state['uploaded_path']}` — '서버 파일 경로' 모드에서 제출하세요.")
+if st.session_state.get("sample_rfp") and input_method == "직접 입력":
+    st.info("📄 샘플 RFP가 준비되었습니다. 폼을 제출하세요.")

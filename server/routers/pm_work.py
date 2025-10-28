@@ -5,13 +5,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import traceback
 import shutil
-import logging
 from pathlib import Path
+from datetime import datetime
 import json
-
+import csv
+import logging
 from server.db.database import get_db
 from server.db import pm_crud, pm_models
 from server.workflow.pm_graph import run_pipeline
+from server.utils.doc_reader import read_text_from_path, read_texts, DocReadError
 
 router = APIRouter(prefix="/api/v1/pm", tags=["pm"])
 logger = logging.getLogger(__name__)  # ✅ 표준 logging 사용
@@ -19,7 +21,96 @@ logger = logging.getLogger(__name__)  # ✅ 표준 logging 사용
 # 파일 업로드 디렉토리 설정
 UPLOAD_DIR = Path("data/inputs/RFP")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    from server.db.database import SessionLocal
+    from server.db import pm_models
+    _DB_AVAILABLE = True
+except Exception:
+    _DB_AVAILABLE = False
+    SessionLocal = None
+    pm_models = None
 
+
+# ==== [추가] 출력 폴더 유틸 ====
+def _scope_out_dir(project_id: str | int) -> Path:
+    """
+    Scope 산출물 기본 폴더: <repo-root>/data/outputs/scope/<project_id>
+    (프로젝트마다 고정 경로로 저장되도록 통일)
+    """
+    # server/routers/pm_work.py 기준으로 repo 루트 탐색
+    here = Path(__file__).resolve()
+    root = here
+    for p in here.parents:
+        if (p / "data").exists():
+            root = p
+            break
+    out = root / "data" / "outputs" / "scope" / str(project_id)
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+# ==== [추가] 산출물 보정 생성기 ====
+def _write_requirements_json(project_id: str | int, requirements: list[dict], source: str = "") -> str:
+    out_dir = _scope_out_dir(project_id)
+    path = out_dir / "requirements.json"
+    payload = {
+        "project_id": str(project_id),
+        "source": source,
+        "generated_at": datetime.utcnow().isoformat(),
+        "requirements": requirements or [],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return str(path)
+
+
+def _write_rtm_csv(project_id: str | int, requirements: list[dict], functions: list[dict] | None = None) -> str:
+    """
+    간단 round-robin RTM (요구사항 ↔ 기능) 생성.
+    기능이 없으면 모두 F-000으로 매핑.
+    """
+    out_dir = _scope_out_dir(project_id)
+    path = out_dir / "rtm.csv"
+    fieldnames = ["req_id", "function_id"]
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        if not requirements:
+            return str(path)
+        fn_list = functions or [{"id": "F-000", "title": "Unassigned"}]
+        for i, r in enumerate(requirements, start=1):
+            req_id = r.get("req_id") or f"REQ-{i:03d}"
+            fid = fn_list[(i - 1) % len(fn_list)]["id"]
+            writer.writerow({"req_id": req_id, "function_id": fid})
+    return str(path)
+
+
+def _write_srs_md(project_id: str | int, requirements: list[dict], source: str = "") -> str:
+    out_dir = _scope_out_dir(project_id)
+    path = out_dir / "srs.md"
+    lines = [
+        f"# SRS (요구사항 명세서)\n",
+        f"- project_id: {project_id}",
+        f"- source: {source}",
+        f"- generated_at: {datetime.utcnow().isoformat()}",
+        f"- requirements: {len(requirements or [])} 개\n",
+    ]
+    for r in (requirements or []):
+        rid = r.get("req_id", "")
+        ttl = r.get("title", "")
+        typ = r.get("type", "")
+        pr  = r.get("priority", "")
+        src = r.get("source_span", "")
+        desc= r.get("description", "")
+        lines += [
+            f"## {rid} — {ttl}",
+            f"- Type: {typ}",
+            f"- Priority: {pr}",
+            f"- Source: {src}\n",
+            desc,
+            ""
+        ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return str(path)
 
 # ===============================
 # 공용 모델
@@ -340,92 +431,139 @@ async def graph_report(project_id: int = Query(..., description="프로젝트 ID
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===============================
-# 신규: Scope Agent (범위관리)
-# ===============================
-
+# ==== [수정] Scope Analyze 라우트 ====
 @router.post("/scope/analyze", response_model=ScopeResponse)
 async def scope_analyze(request: ScopeRequest):
     """
-    Scope Agent: RFP → Requirements 추출
-    
-    Examples:
-        # 1. 텍스트 직접 전달
-        {
-          "project_id": "P001",
-          "text": "RFP 내용...",
-          "methodology": "agile"
-        }
-        
-        # 2. 파일 경로 전달
-        {
-          "project_id": "P001",
-          "documents": [{"path": "rfp.txt", "type": "RFP"}],
-          "methodology": "waterfall"
-        }
+    입력이 text 또는 documents든 상관없이:
+      1) documents면 서버에서 텍스트로 표준화
+      2) run_pipeline('scope', payload) 호출
+      3) 요구사항을 DB 저장 (있으면)
+      4) requirements_json / rtm_csv / srs_md 경로를 보정하여 응답
     """
+    # 0) project_id/methodology 정규화
+    project_id = request.project_id or request.project_name or "default"
+    methodology = request.methodology or "waterfall"
+
+    # 1) 항상 text 확보 (공통 리더 사용)
+    payload = {"project_id": project_id, "methodology": methodology}
+    source_files_meta = None
     try:
-        # Payload 구성
-        payload = {
-            "project_id": request.project_id or request.project_name or "default",
-            "methodology": request.methodology or "waterfall",
-        }
-        
-        # Text or documents
-        if request.text:
-            payload["text"] = request.text
+        if request.text and str(request.text).strip():
+            payload["text"] = str(request.text).strip()
+            source_label = "inline-text"
         elif request.documents:
-            payload["documents"] = [doc.model_dump() for doc in request.documents]
+            paths = []
+            for d in request.documents:
+                path_val = getattr(d, "path", None) or (d.get("path") if isinstance(d, dict) else None)
+                if path_val:
+                    paths.append(path_val)
+            if not paths:
+                raise HTTPException(status_code=400, detail="documents[].path가 비어 있습니다.")
+            merged_text, metas = read_texts(paths, header=True)
+            payload["text"] = merged_text
+            payload["documents"] = [{"path": p} for p in paths]  # trace용 원복
+            source_files_meta = metas
+            source_label = ", ".join([Path(m["path"]).name for m in metas])
         else:
-            raise ValueError("Either 'text' or 'documents' must be provided")
-        
-        # Options
-        if request.options:
-            payload.update(request.options)
-        
-        # Scope Agent 실행
-        result = await run_pipeline("scope", payload)
-        
-        if result.get("status") != "ok":
-            raise ValueError(result.get("message", "Scope analysis failed"))
-        
-        return ScopeResponse(
-            status=result.get("status", "ok"),
-            message=result.get("message"),
-            project_id=str(payload["project_id"]),
-            
-            # 파일 경로
-            requirements_json=result.get("requirements_json"),
-            srs_path=result.get("srs_path"),
-            rtm_csv=result.get("rtm_csv"),
-            charter_path=result.get("charter_path"),
-            business_plan_path=result.get("business_plan_path"),
-            
-            # 파싱된 데이터
-            requirements=result.get("requirements", []),
-            functions=result.get("functions", []),
-            deliverables=result.get("deliverables", []),
-            acceptance_criteria=result.get("acceptance_criteria", []),
-            
-            # RTM
-            rtm_json=result.get("rtm_json"),
-            
-            # PMP 산출물
-            pmp_outputs=result.get("pmp_outputs"),
-            
-            # 통계
-            stats=result.get("stats")
-        )
-        
-    except ValueError as e:
-        logger.error(f"[Scope Agent] Validation Error: {e}")
+            raise HTTPException(status_code=400, detail="No RFP text or documents provided")
+    except DocReadError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception(f"[Scope Agent] Error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Scope analysis failed: {str(e)}"
-        )
+
+    # 옵션 전달
+    if request.options:
+        payload["options"] = dict(request.options)
+
+    # 2) 파이프라인 호출
+    result = await run_pipeline(kind="scope", payload=payload)
+
+    # 3) 결과 파싱
+    status = result.get("status", "ok")
+    if status not in (None, "ok"):
+        # ScopeAgent가 명시적으로 실패 리턴
+        raise HTTPException(status_code=400, detail=result.get("message", "Scope analysis failed"))
+
+    requirements = result.get("requirements") or []
+    functions    = result.get("functions") or []
+    deliverables = result.get("deliverables") or []
+    acceptance   = result.get("acceptance_criteria") or []
+    stats        = result.get("stats")
+
+    # 4) 산출물 경로(부재 시 보정 생성)
+    out_dir = _scope_out_dir(project_id)
+    req_json_path = result.get("requirements_json")
+    rtm_csv_path  = result.get("rtm_csv")
+    srs_path      = result.get("srs_path")
+
+    if not req_json_path:
+        req_json_path = _write_requirements_json(project_id, requirements, source_label)
+        logger.info("[scope] requirements.json generated at %s", req_json_path)
+
+    if not rtm_csv_path:
+        rtm_csv_path = _write_rtm_csv(project_id, requirements, functions)
+        logger.info("[scope] rtm.csv generated at %s", rtm_csv_path)
+
+    if not srs_path:
+        srs_path = _write_srs_md(project_id, requirements, source_label)
+        logger.info("[scope] srs.md generated at %s", srs_path)
+
+    # 5) 요구사항 DB 저장 (가능할 때만)
+    if _DB_AVAILABLE and requirements:
+        db = SessionLocal()
+        saved = 0
+        try:
+            for i, r in enumerate(requirements, start=1):
+                req_key = r.get("req_id") or f"REQ-{i:03d}"
+                title   = r.get("title") or ""
+                desc    = r.get("description") or ""
+                prio    = r.get("priority") or "Medium"
+                req_typ = r.get("type") or "General"
+                src     = r.get("source_span") or source_label
+
+                try:
+                    obj = pm_models.PM_Requirement(
+                        project_id=project_id,
+                        req_key=req_key,
+                        title=title,
+                        description=desc,
+                        priority=prio,
+                        req_type=req_typ,
+                        source_span=src,
+                        created_at=datetime.utcnow()
+                    )
+                    db.add(obj)
+                    saved += 1
+                except Exception as e:
+                    # 유니크 제약(중복 req_key) 등은 스킵하고 다음으로
+                    logger.debug("[scope] skip requirement (%s): %s", req_key, e)
+                    continue
+            db.commit()
+            logger.info("[scope] saved requirements: %s (project_id=%s)", saved, project_id)
+        except Exception as e:
+            db.rollback()
+            logger.exception("[scope] DB save failed: %s", e)
+        finally:
+            db.close()
+
+    # 6) 응답 (기존 스키마 유지)
+    return ScopeResponse(
+        status="ok",
+        message=result.get("message"),
+        project_id=str(project_id),
+        requirements_json=req_json_path,
+        srs_path=srs_path,
+        rtm_csv=rtm_csv_path,
+        charter_path=result.get("charter_path"),
+        business_plan_path=result.get("business_plan_path"),
+        requirements=requirements,
+        functions=functions,
+        deliverables=deliverables,
+        acceptance_criteria=acceptance,
+        rtm_json=result.get("rtm_json"),
+        pmp_outputs=result.get("pmp_outputs"),
+        stats=stats,
+    )
+        
 
 
 @router.get("/scope/summary")
