@@ -9,6 +9,12 @@ API_BASE = st.secrets.get("API_BASE", "http://127.0.0.1:8001/api/v1/pm")
 
 st.title("🔎 Scope Agent — RFP 분석")
 
+# ✅ 세션 상태 초기화
+if "uploaded_path" not in st.session_state:
+    st.session_state["uploaded_path"] = ""
+if "sample_rfp" not in st.session_state:
+    st.session_state["sample_rfp"] = ""
+
 # ============================================
 # 1. 입력 폼
 # ============================================
@@ -28,8 +34,11 @@ with st.form("scope_form"):
     )
     
     if input_method == "직접 입력":
+        # ✅ 세션에 샘플이 있으면 자동으로 채워짐
+        default_text = st.session_state.get("sample_rfp", "")
         rfp_text = st.text_area(
             "RFP 내용",
+            value=default_text,
             height=300,
             placeholder="""# 프로젝트 RFP
 
@@ -45,9 +54,11 @@ with st.form("scope_form"):
         rfp_path = None
     else:
         rfp_text = None
+        # ✅ 업로드된 경로가 있으면 자동으로 채워짐
+        default_path = st.session_state.get("uploaded_path", "data/inputs/RFP/sample_rfp.txt")
         rfp_path = st.text_input(
             "서버 파일 경로",
-            value="data/inputs/RFP/sample_rfp.txt",
+            value=default_path,
             help="서버에 업로드된 RFP 파일 경로 (.txt, .md, .pdf)"
         )
     
@@ -320,3 +331,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.caption(f"API: {API_BASE}")
+
+# ✅ 샘플 RFP 자동 입력
+if "sample_rfp" in st.session_state and input_method == "직접 입력":
+    st.info("💡 샘플 RFP가 준비되었습니다. 폼에서 '직접 입력'을 선택하고 제출하세요.")

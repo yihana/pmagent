@@ -1,22 +1,5 @@
 {
   "project_id": "Demo Project",
-  "generated_at": "2025-10-27T04:53:16.810173",
-  "tasks": [
-    {
-      "id": "WBS-1",
-      "name": "Project",
-      "start": "2025-10-27",
-      "end": "2025-10-28",
-      "duration": 1,
-      "predecessors": []
-    },
-    {
-      "id": "WBS-1.1",
-      "name": "Phase 1",
-      "start": "2025-10-27",
-      "end": "2025-10-29",
-      "duration": 2,
-      "predecessors": []
-    }
-  ]
+  "generated_at": "2025-10-28T01:35:34.530092",
+  "tasks": []
 }

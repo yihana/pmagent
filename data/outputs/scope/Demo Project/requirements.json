@@ -1,6 +1,39 @@
 {
-  "requirements": [],
-  "functions": [],
+  "requirements": [
+    {
+      "req_id": "REQ-001",
+      "title": "## 2. 기능 요구사항",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "## 2. 기능 요구사항",
+      "source_span": "RFP"
+    },
+    {
+      "req_id": "REQ-005",
+      "title": "## 3. 비기능 요구사항",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "## 3. 비기능 요구사항",
+      "source_span": "RFP"
+    }
+  ],
+  "functions": [
+    {
+      "id": "FUNC-002",
+      "title": "### 2.1 사용자 관리\n- 회원가입 및 로그인 기능\n- 소셜 로그인 지원 (Google, Naver, Kakao)\n- 프로필 관리",
+      "description": "### 2.1 사용자 관리\n- 회원가입 및 로그인 기능\n- 소셜 로그인 지원 (Google, Naver, Kakao)\n- 프로필 관리"
+    },
+    {
+      "id": "FUNC-003",
+      "title": "### 2.3 주문 및 결제\n- 장바구니 기능\n- 다양한 결제 수단 지원\n- 주문 내역 조회",
+      "description": "### 2.3 주문 및 결제\n- 장바구니 기능\n- 다양한 결제 수단 지원\n- 주문 내역 조회"
+    },
+    {
+      "id": "FUNC-004",
+      "title": "### 2.4 관리자 기능\n- 대시보드\n- 상품 관리\n- 주문 관리\n- 회원 관리",
+      "description": "### 2.4 관리자 기능\n- 대시보드\n- 상품 관리\n- 주문 관리\n- 회원 관리"
+    }
+  ],
   "deliverables": [],
   "acceptance_criteria": []
 }
