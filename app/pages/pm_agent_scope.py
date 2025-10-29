@@ -1,5 +1,5 @@
 # app/pages/pm_scope.py
-# Scope Agent 전용 페이지 (라디오=폼 밖 / 나머지 기능 원복)
+# Scope Agent 전용 페이지 (DOCX 지원 추가)
 
 import streamlit as st
 import requests
@@ -26,7 +26,7 @@ input_method = st.radio(
 )
 
 # ============================================
-# 1. 입력 폼 (원복)
+# 1. 입력 폼
 # ============================================
 with st.form("scope_form"):
     st.markdown("### 프로젝트 정보")
@@ -63,7 +63,7 @@ with st.form("scope_form"):
         rfp_path = st.text_input(
             "서버 파일 경로",
             value=default_path,
-            help="서버에 업로드된 RFP 파일 경로 (.txt, .md, .pdf)"
+            help="서버에 업로드된 RFP 파일 경로 (PDF, TXT, MD, DOCX)"
         )
     
     with st.expander("⚙️ 옵션"):
@@ -73,7 +73,7 @@ with st.form("scope_form"):
     submitted = st.form_submit_button("🔎 Scope 추출 실행", type="primary")
 
 # ============================================
-# 2. Scope 실행 (원복)
+# 2. Scope 실행
 # ============================================
 if submitted:
     # ✅ 입력 검증
@@ -124,7 +124,7 @@ if submitted:
         st.stop()
     
     # ============================================
-    # 3. 결과 표시 (원복)
+    # 3. 결과 표시
     # ============================================
     if resp.status_code == 200:
         st.success("✅ Scope 추출 완료")
@@ -241,15 +241,15 @@ if submitted:
             st.code(resp.text)
 
 # ============================================
-# 6. 파일 업로드 (사이드바) — 원복
+# 6. 파일 업로드 (사이드바) — ✅ DOCX 추가
 # ============================================
 with st.sidebar:
     st.markdown("### 📤 파일 업로드")
     
     upload = st.file_uploader(
         "RFP 파일",
-        type=["pdf", "txt", "md"],
-        help="PDF, TXT, MD 파일 지원"
+        type=["pdf", "txt", "md", "docx"],  # ✅ DOCX 추가
+        help="PDF, TXT, MD, DOCX 파일 지원"  # ✅ 도움말 업데이트
     )
     
     if upload and st.button("업로드", type="primary"):
@@ -258,7 +258,8 @@ with st.sidebar:
             mime_types = {
                 ".pdf": "application/pdf",
                 ".txt": "text/plain",
-                ".md": "text/markdown"
+                ".md": "text/markdown",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             }
             ext = Path(upload.name).suffix.lower()
             mime = mime_types.get(ext, "application/octet-stream")
@@ -272,18 +273,98 @@ with st.sidebar:
                     timeout=60
                 )
             
-            if res.status_code == 200:
+            # ✅ 상태 코드 확인
+            st.info(f"📥 서버 응답: {res.status_code} {res.reason}")
+            
+            if res.status_code != 200:
+                st.error(f"❌ 업로드 실패 ({res.status_code} {res.reason})")
+                st.error(f"응답 본문:\n{res.text}")
+                
+                # 자세한 디버그 정보
+                with st.expander("🔍 응답 상세 정보"):
+                    st.write(f"**Status Code:** {res.status_code}")
+                    st.write(f"**Headers:** {dict(res.headers)}")
+                    st.write(f"**Body Length:** {len(res.text)} bytes")
+                    st.write(f"**Body:** {res.text[:500]}...")
+                st.stop()
+            
+            # ✅ JSON 안전 파싱
+            try:
                 result = res.json()
-                path = result.get("path")
-                st.success("✅ 업로드 완료")
-                st.code(path)
-                st.info("📋 위 경로를 복사하여 '서버 파일 경로'에 입력하세요.")
-                # 필요 시: st.session_state["uploaded_path"] = path
-            else:
-                st.error(f"❌ 업로드 실패 ({res.status_code})")
-                st.code(res.text)
+                st.success("✅ JSON 파싱 성공")
+            except ValueError as e:
+                st.error(f"❌ JSON 파싱 실패: {e}")
+                st.error(f"응답 본문 (처음 1000자):\n{res.text[:1000]}")
+                
+                # Content-Type 확인
+                with st.expander("🔍 응답 헤더 정보"):
+                    st.write(f"**Content-Type:** {res.headers.get('content-type', 'N/A')}")
+                    st.write(f"**Content-Length:** {res.headers.get('content-length', 'N/A')}")
+                st.stop()
+            except Exception as e:
+                st.error(f"❌ 예상치 못한 파싱 오류: {e}")
+                st.stop()
+
+            # ✅ None 체크
+            if result is None:
+                st.error("❌ 서버 응답이 None입니다 (응답 본문이 비어있거나 null)")
+                st.error(f"응답 길이: {len(res.text)} bytes")
+                with st.expander("🔍 전체 응답 정보"):
+                    st.write(f"**Text:** {repr(res.text)}")
+                    st.write(f"**Headers:** {dict(res.headers)}")
+                st.stop()
+
+            # ✅ Dict 타입 검증
+            if not isinstance(result, dict):
+                st.error(f"❌ 서버 응답이 dict가 아닙니다: {type(result)}")
+                st.code(str(result)[:500])
+                st.stop()
+
+            # ✅ 상태 필드 확인
+            if "status" not in result:
+                st.error("❌ 응답에 'status' 필드가 없습니다")
+                st.code(json.dumps(result, ensure_ascii=False, indent=2)[:1000])
+                st.stop()
+
+            if result.get("status") != "ok":
+                st.error(f"❌ 서버 오류: {result.get('message', 'Unknown error')}")
+                st.code(json.dumps(result, ensure_ascii=False, indent=2))
+                st.stop()
+
+            # ✅ 파일 경로 추출
+            path = result.get("path") or result.get("abs_path")
+            if not path:
+                st.error("❌ 서버 응답에 파일 경로가 없습니다.")
+                st.error(f"응답 키: {list(result.keys())}")
+                st.code(json.dumps(result, ensure_ascii=False, indent=2))
+                st.stop()
+
+            # ✅ 성공 처리
+            st.session_state["uploaded_path"] = path
+            st.success("✅ 업로드 완료!")
+            st.info(f"📁 저장된 경로: `{path}`")
+            st.info(f"📦 파일 크기: {result.get('size', 'N/A')} bytes")
+            st.info("💡 '서버 파일 경로' 모드를 선택하고 폼을 제출하세요.")
+            
+            # 📊 전체 응답 정보 (확장 가능)
+            with st.expander("📊 업로드 응답 (JSON)"):
+                st.json(result)
+
+        except requests.exceptions.Timeout:
+            st.error("❌ 요청 시간 초과 (60초) - 서버 응답 없음")
+            st.info("💡 서버가 켜져있는지 확인하세요: " + f"`{API_BASE}`")
+        except requests.exceptions.ConnectionError as e:
+            st.error(f"❌ 연결 오류 - 서버에 연결할 수 없습니다")
+            st.error(f"서버 주소: {API_BASE}")
+            st.error(f"오류: {e}")
+        except requests.exceptions.RequestException as e:
+            st.error(f"❌ 네트워크 오류: {e}")
         except Exception as e:
-            st.error(f"❌ 오류: {e}")
+            st.error(f"❌ 예상치 못한 오류 발생: {type(e).__name__}")
+            st.error(f"상세: {str(e)}")
+            import traceback
+            with st.expander("🔍 상세 에러 스택"):
+                st.code(traceback.format_exc())
     
     st.markdown("---")
     
@@ -345,7 +426,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"API: {API_BASE}")
 
-# ✅ 샘플/업로드 상태 안내 (선택)
+# ✅ 샘플/업로드 상태 안내
 if st.session_state.get("uploaded_path"):
     st.info(f"📁 업로드된 파일: `{st.session_state['uploaded_path']}` — '서버 파일 경로' 모드에서 제출하세요.")
 if st.session_state.get("sample_rfp") and input_method == "직접 입력":

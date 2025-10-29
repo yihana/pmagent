@@ -1,4 +1,4 @@
-# server/workflow/agents/scope_agent/pipeline.py (버그 수정)
+# server/workflow/agents/scope_agent/pipeline.py (DOCX 지원 추가)
 import json
 import asyncio
 from pathlib import Path
@@ -8,6 +8,8 @@ import logging
 import csv
 import copy
 import re
+from server.utils.doc_reader import read_texts, ingest_text, DocReadError
+
 
 logger = logging.getLogger("scope.agent")
 
@@ -61,7 +63,10 @@ def _find_root(start: Path) -> Path:
 
 
 class ScopeAgent:
-    """Scope Management Agent (PMP 5.0)"""
+    """Scope Management Agent (PMP 5.0)
+    
+    Supports RFP document formats: PDF, TXT, MD, DOCX
+    """
     
     def __init__(self, data_dir: Optional[str] = None):
         here = Path(__file__).resolve()
@@ -73,7 +78,10 @@ class ScopeAgent:
         self.OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     async def pipeline(self, payload: Any) -> Dict[str, Any]:
-        """Scope Agent 파이프라인"""
+        """Scope Agent 파이프라인
+        
+        RFP 문서 형식 지원: PDF, TXT, MD, DOCX
+        """
         if not isinstance(payload, dict):
             if hasattr(payload, "model_dump"):
                 payload = payload.model_dump()
@@ -91,29 +99,24 @@ class ScopeAgent:
         proj_dir = self.OUT_DIR / str(project_id)
         proj_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1) Ingest RFP
-        raw_text, rfp_path = await self._ingest(text_input, documents)
-        
-        if not raw_text or not raw_text.strip():
-            return {
-                "status": "error",
-                "message": "No RFP text provided",
-                "project_id": project_id
-            }
+        # 1) Ingest RFP - ✅ 공통 유틸 사용 (PDF, TXT, MD, DOCX 지원)
+        raw_text, rfp_path = await asyncio.to_thread(
+            ingest_text,
+            text_input,
+            documents,
+            [self.INPUT_RFP_DIR, self.DATA_DIR / "inputs" / "RFP", self.DATA_DIR]
+        )
+        if not raw_text.strip():
+            return {"status": "error", "message": "No RFP text provided", "project_id": project_id}
 
-        # 2) Extract items
+        # 2) Extract items (LLM or fallback)
         logger.info(f"[SCOPE] Extracting requirements for project {project_id}")
         items = await self._extract_items(raw_text, project_id)
 
-        # 3) Save requirements to DB
+        # 3) Save requirements to DB (존재 시 upsert)
         if _HAS_DB and pm_models is not None and items.get("requirements"):
             try:
-                await asyncio.to_thread(
-                    self._save_requirements_db, 
-                    project_id, 
-                    items["requirements"]
-                )
-                logger.info(f"[SCOPE] Saved {len(items['requirements'])} requirements to DB")
+                await asyncio.to_thread(self._save_requirements_db, project_id, items["requirements"])
             except Exception as e:
                 logger.exception("save_requirements_db failed: %s", e)
 
@@ -185,7 +188,7 @@ class ScopeAgent:
             "srs_path": str(srs_path) if srs_path and Path(srs_path).exists() else None,
             "charter_path": str(charter_path) if charter_path.exists() else None,
             "business_plan_path": str(business_plan_path) if business_plan_path.exists() else None,
-            "pmp_outputs": pmp_outputs_filtered,  # ✅ 필터링된 결과
+            "pmp_outputs": pmp_outputs_filtered,
             "stats": {
                 "requirements": len(items.get("requirements", [])),
                 "functions": len(items.get("functions", [])),
@@ -200,33 +203,6 @@ class ScopeAgent:
     # -------------------------
     # Helper methods
     # -------------------------
-    
-    async def _ingest(
-        self, 
-        text: Optional[str], 
-        documents: List[Dict[str, Any]]
-    ) -> Tuple[str, Optional[str]]:
-        """Load RFP text"""
-        if text and isinstance(text, str) and text.strip():
-            return text, None
-            
-        if documents and len(documents) > 0:
-            first = documents[0]
-            path = first.get("path") if isinstance(first, dict) else getattr(first, "path", None)
-            if path:
-                p = Path(path)
-                if not p.is_absolute():
-                    p = self.INPUT_RFP_DIR / p
-                if p.exists():
-                    try:
-                        if p.suffix.lower() in (".txt", ".md"):
-                            return p.read_text(encoding="utf-8"), str(p)
-                        else:
-                            return f"[RFP file: {p.name}] (extraction not implemented)", str(p)
-                    except Exception as e:
-                        logger.exception("ingest read failed: %s", e)
-                        return f"[WARN] could not read: {p}", str(p)
-        return ("", None)
 
     async def _extract_items(
         self, 
@@ -256,7 +232,7 @@ class ScopeAgent:
                 return data
                 
             except Exception as e:
-                logger.exception("LLM extraction failed: %s – falling back", e)
+                logger.exception("LLM extraction failed: %s — falling back", e)
         
         # Fallback
         return self._fallback_extract(raw_text)

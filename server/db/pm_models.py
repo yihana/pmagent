@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     JSON,
     ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -165,14 +166,15 @@ class PM_Scope(Base):
 #1023 Scope agent가 추출한 요구사항을 저장하고, RTM(Requirement-to-WBS/Test) 매핑을 유지하고, 변경요청(CR) 기록, CMP(변경영향분석) 시 사용
 class PM_Requirement(Base):
     __tablename__ = "pm_requirements"
+    __table_args__ = (UniqueConstraint("project_id", "req_id", name="uq_project_reqid"),)
     id = Column(Integer, primary_key=True, autoincrement=True)
     project_id = Column(Integer, index=True, nullable=False)
-    req_id = Column(String(50), nullable=False)   # REQ-001 등
+    req_id = Column(String(50), nullable=False)
     title = Column(String(1000), nullable=False)
-    type = Column(String(50), nullable=True)  # functional/non-functional/constraint
+    type = Column(String(50), nullable=True)      # functional / non-functional / constraint
     priority = Column(String(20), nullable=True)
     description = Column(Text, nullable=True)
-    source_doc = Column(String(1024), nullable=True)  # RFP path or doc id
+    source_doc = Column(String(1024), nullable=True)
     status = Column(String(20), default="Draft")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
