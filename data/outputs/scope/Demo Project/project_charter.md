@@ -1,10 +1,4 @@
 # Project Charter
 **Project ID:** Demo Project
-**Date:** 2025-10-28
-
-## Project Purpose
-
-## Objectives
-
-## Success Criteria
+**Date:** 2025-11-04
 
