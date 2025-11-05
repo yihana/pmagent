@@ -1,3 +1,7 @@
 req_id,title,type,priority,wbs_id,test_case,verification_status
-REQ-001,## 2. 기능 요구사항,functional,Medium,,,Pending WBS
-REQ-005,## 3. 비기능 요구사항,functional,Medium,,,Pending WBS
+REQ-001,"# **제안요청서 (RFP)**
+**메리츠종금증권 웹 접근성 개선 프로젝트**
+**2014.02.19 발행**
+---
+## **Ⅰ. 개요**
+#",functional,Medium,,,Pending WBS
