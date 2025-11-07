@@ -12,21 +12,7 @@
           "children": [
             {
               "id": "WBS-1.1.1",
-              "name": "사용자 관리 기능",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            },
-            {
-              "id": "WBS-1.1.2",
-              "name": "상품 관리 기능",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            },
-            {
-              "id": "WBS-1.1.3",
-              "name": "주문 및 결제 기능",
+              "name": "1. 과업의 배경 및 필요성",
               "level": 3,
               "owner": null,
               "deliverables": null
@@ -37,50 +23,13 @@
           "id": "WBS-1.2",
           "name": "Phase 2",
           "level": 2,
-          "children": [
-            {
-              "id": "WBS-1.2.1",
-              "name": "관리자 기능",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            },
-            {
-              "id": "WBS-1.2.2",
-              "name": "성능 요구사항",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            },
-            {
-              "id": "WBS-1.2.3",
-              "name": "보안 요구사항",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            }
-          ]
+          "children": []
         },
         {
           "id": "WBS-1.3",
           "name": "Phase 3",
           "level": 2,
-          "children": [
-            {
-              "id": "WBS-1.3.1",
-              "name": "가용성 요구사항",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            },
-            {
-              "id": "WBS-1.3.2",
-              "name": "제약사항",
-              "level": 3,
-              "owner": null,
-              "deliverables": null
-            }
-          ]
+          "children": []
         }
       ]
     }

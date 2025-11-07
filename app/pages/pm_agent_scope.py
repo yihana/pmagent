@@ -109,7 +109,7 @@ if submitted:
             resp = requests.post(
                 f"{API_BASE}/scope/analyze", 
                 json=payload, 
-                timeout=180
+                timeout=600
             )
             # 응답이 JSON 아닐 수도 있으니 보호
             try:

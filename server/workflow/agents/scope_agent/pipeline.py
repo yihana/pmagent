@@ -17,22 +17,61 @@ try:
     from .prompts import SCOPE_EXTRACT_PROMPT, RTM_PROMPT, WBS_SYNTHESIS_PROMPT
 except Exception:
     logger.warning("[SCOPE_AGENT] prompts import failed, using fallback prompts.")
+    
+    # 개선된 fallback prompt - 세분화 강조
     SCOPE_EXTRACT_PROMPT = """
-당신은 PMP 표준을 준수하는 PMO 분석가입니다.
-아래 문서에서 요구사항(requirements), 관련 기능(functions), 산출물(deliverables), 승인기준(acceptance_criteria)을 구조화하여 JSON으로 추출하세요.
-요구사항은 고유 아이디(req_id)를 부여하세요 (예: REQ-001).
-출력 예시:
+당신은 PMP 표준을 준수하는 전문 PMO 분석가입니다.
+
+⚠️ 중요: 각 요구사항은 **독립적으로 구현 가능한 단위**로 세분화하세요.
+
+## 세분화 원칙
+✅ 하나의 요구사항 = 하나의 기능/특성
+✅ "~를 포함한다" 형태의 그룹화 금지
+✅ 각 요구사항이 개별적으로 테스트 가능해야 함
+
+나쁜 예: "사용자 관리 기능 (회원가입, 로그인, 프로필 포함)"
+좋은 예: 
+- REQ-001: 이메일 기반 회원가입
+- REQ-002: 소셜 로그인 통합
+- REQ-003: 사용자 프로필 관리
+
+## 출력 JSON 구조
 {{
-  "requirements":[{{"req_id":"REQ-001","title":"...","type":"functional","priority":"High","description":"...","source_span":"..."}}],
+  "requirements": [
+    {{
+      "req_id": "REQ-001",
+      "title": "구체적인 기능명 (20자 이내)",
+      "type": "functional",
+      "priority": "High",
+      "description": "무엇을 어떻게 해야 하는지 상세히 기술 (1-2문장)",
+      "source_span": "문서 섹션 번호",
+      "acceptance_criteria": [
+        "검증 가능한 기준 1",
+        "검증 가능한 기준 2"
+      ]
+    }}
+  ],
   "functions": [],
   "deliverables": [],
   "acceptance_criteria": []
 }}
+
 문서:
 {context}
 """
-    RTM_PROMPT = "RTM mapping for requirements: {{requirements}}"
-    WBS_SYNTHESIS_PROMPT = "WBS synthesis for items: {{items}}"
+    
+    RTM_PROMPT = """
+요구사항 추적표(RTM) 생성:
+{{requirements}}
+
+각 요구사항을 설계-구현-테스트와 매핑하세요.
+JSON 형식으로 반환.
+"""
+    
+    WBS_SYNTHESIS_PROMPT = """
+⚠️ WBS는 Schedule Agent에서 생성합니다.
+Scope Agent는 Requirements 추출만 담당합니다.
+"""
 
 # DB imports (optional)
 try:
@@ -114,27 +153,54 @@ def _safe_extract_raw(resp: Any) -> str:
         logger.warning("[SCOPE] raw extract failed: %s", e)
         return str(resp) if resp else ""
 
+# pipeline.py의 _json_from_text 함수 교체 (Line 156-170) #1107
 def _json_from_text(maybe: str) -> Optional[dict]:
-    """문자열에서 최초 JSON 객체(중괄호)를 추출해 파싱 시도."""
+    """문자열에서 JSON 추출 (Markdown 코드 블록 지원)"""
     if not maybe:
         return None
+    
     try:
-        # attempt to find JSON object, prefer full content if it's JSON
         s = maybe.strip()
+        
+        # ⭐ Markdown 코드 블록 제거
+        # ```json\n{...}\n``` → {...}
+        s = re.sub(r'```json\s*', '', s)
+        s = re.sub(r'```\s*', '', s)
+        s = s.strip()
+        
+        # JSON 파싱
         if s.startswith("{") and s.endswith("}"):
-            return json.loads(s)
-        m = re.search(r"(\{[\s\S]*\})", maybe)
+            result = json.loads(s)
+            req_count = len(result.get("requirements", []))
+            logger.info(f"✅ [SCOPE] JSON 파싱 성공 (requirements={req_count})")
+            return result
+        
+        # 정규식으로 추출
+        m = re.search(r"(\{[\s\S]*\})", s)
         if m:
-            return json.loads(m.group(1))
+            result = json.loads(m.group(1))
+            req_count = len(result.get("requirements", []))
+            logger.info(f"✅ [SCOPE] 정규식 추출 성공 (requirements={req_count})")
+            return result
+            
+    except json.JSONDecodeError as e:
+        logger.error(f"[SCOPE] JSON 파싱 실패: {e}")
+        logger.error(f"[SCOPE] 응답 처음 500자:\n{maybe[:500]}")
     except Exception as e:
-        logger.debug("[SCOPE] json parse failed: %s", e)
+        logger.error(f"[SCOPE] 예외: {e}")
+    
     return None
+
+# ============================================================================
+# 1. _estimate_confidence 함수 수정 (Line 172-202) #1107 confidence 무시하고 파싱
+# ============================================================================
 
 def _estimate_confidence(resp_json: Optional[dict], raw_text: str) -> float:
     """
-    간단한 confidence 추정기:
-    - LLM이 'confidence' 키(0..1)를 반환하면 우선 사용
-    - 아니면 요구사항/기능 수, 각 요구사항의 필드 완전성 등을 기준으로 0..1 추정
+    개선된 confidence 추정기:
+    - 요구사항이 없으면 매우 낮은 점수 (0.1)
+    - 요구사항 수와 필드 완전성을 모두 고려
+    - acceptance_criteria 존재 여부도 체크
     """
     if resp_json and isinstance(resp_json, dict):
         # direct provided confidence
@@ -144,23 +210,71 @@ def _estimate_confidence(resp_json: Optional[dict], raw_text: str) -> float:
                 return min(max(c, 0.0), 1.0)
             except Exception:
                 pass
-        # heuristic: presence of requirements and fields
-        reqs = resp_json.get("requirements") if resp_json else None
-        if reqs and isinstance(reqs, list) and len(reqs) > 0:
-            score = 0.5
-            filled = 0
-            for r in reqs:
-                if r.get("req_id") and r.get("title") and r.get("description"):
-                    filled += 1
-            ratio = filled / len(reqs)
-            score += 0.5 * ratio  # 0.5 ~ 1.0
-            return min(score, 0.99)
-    # fallback: if raw_text length small -> low confidence, else medium
-    if raw_text and len(raw_text) > 800:
-        return 0.6
-    if raw_text and len(raw_text) > 200:
-        return 0.45
-    return 0.2
+        
+        # heuristic: requirements 수와 품질
+        reqs = resp_json.get("requirements")
+        if not reqs or not isinstance(reqs, list):
+            logger.debug("[SCOPE] confidence: requirements가 없거나 list가 아님")
+            return 0.1  # 요구사항이 없으면 매우 낮은 점수
+        
+        if len(reqs) == 0:
+            logger.debug("[SCOPE] confidence: requirements 배열이 비어있음")
+            return 0.1  # 빈 배열도 매우 낮은 점수
+        
+        # 요구사항 수에 따른 기본 점수
+        if len(reqs) < 3:
+            base_score = 0.3  # 너무 적음
+        elif len(reqs) < 5:
+            base_score = 0.5  # 적음
+        elif len(reqs) < 10:
+            base_score = 0.6  # 보통
+        else:
+            base_score = 0.7  # 충분
+        
+        # 필드 완전성 체크
+        filled = 0
+        has_ac = 0  # acceptance_criteria 있는 것
+        
+        for r in reqs:
+            # 필수 필드
+            has_required = (
+                r.get("req_id") and 
+                r.get("title") and 
+                r.get("description") and
+                r.get("type") and
+                r.get("priority")
+            )
+            
+            if has_required:
+                filled += 1
+            
+            # acceptance_criteria 체크
+            ac = r.get("acceptance_criteria")
+            if ac and isinstance(ac, list) and len(ac) >= 2:
+                has_ac += 1
+        
+        if len(reqs) == 0:
+            return 0.1
+        
+        field_ratio = filled / len(reqs)  # 필수 필드 충족률
+        ac_ratio = has_ac / len(reqs)     # acceptance_criteria 충족률
+        
+        # 최종 점수 계산
+        # base_score (0.3-0.7) + field_ratio (0-0.2) + ac_ratio (0-0.1)
+        final_score = base_score + (field_ratio * 0.2) + (ac_ratio * 0.1)
+        
+        logger.debug(
+            f"[SCOPE] confidence: {len(reqs)}개 요구사항, "
+            f"필드 충족 {filled}/{len(reqs)}, "
+            f"AC 충족 {has_ac}/{len(reqs)}, "
+            f"점수 {final_score:.3f}"
+        )
+        
+        return min(final_score, 0.99)
+    
+    # fallback: JSON 파싱 실패
+    logger.debug("[SCOPE] confidence: JSON 파싱 실패")
+    return 0.1
 
 def _ensure_req_ids(reqs: List[dict]) -> List[dict]:
     """req_id가 없으면 자동 생성"""
@@ -277,124 +391,192 @@ class ScopeAgent:
         logger.info("✅ [SCOPE] 응답완료: %s (requirements=%d, saved=%d)", project_id, len(items.get("requirements", [])), saved)
         return result
 
-    async def _extract_items_with_confidence(self, text: str, threshold: float, max_attempts: int):
+# ============================================================================
+# 2. _extract_items_with_confidence 메서드 수정 (Line 318-430) #1107 confidence 무시하고 파싱
+# ============================================================================
+
+    async def _extract_items_with_confidence(
+        self, text: str, threshold: float = 0.75, max_attempts: int = 3
+    ) -> tuple:
         """
-        LLM을 반복 호출하여 confidence가 threshold 이상일 때까지 재시도.
-        반환: (items_dict, raw_response)
+        개선된 confidence 기반 추출
+        
+        변경사항:
+        1. 빈 결과 조기 감지 및 재시도
+        2. refinement prompt 개선
+        3. threshold 동적 조정
         """
         if not text:
             return {"requirements": [], "functions": []}, None
 
         llm = self.llm
         attempt = 0
-        prev_raw = None
         last_items = None
         last_raw = None
+        
+        # 시도별 threshold 완화 (너무 엄격하면 영원히 통과 못함)
+        attempt_thresholds = {
+            1: threshold,           # 0.75
+            2: threshold - 0.05,    # 0.70
+            3: threshold - 0.10     # 0.65
+        }
 
         while attempt < max_attempts:
             attempt += 1
-            logger.info("🔵 [SCOPE] LLM 시도 #%d (threshold=%.2f)", attempt, threshold)
+            current_threshold = attempt_thresholds.get(attempt, threshold)
+            
+            logger.info(
+                "🔵 [SCOPE] LLM 시도 #%d/%d (threshold=%.2f)", 
+                attempt, max_attempts, current_threshold
+            )
 
-            # build prompt - include previous output for refinement if present
+            # Build prompt
             if last_items is None:
+                # 첫 시도: 일반 추출
                 prompt = SCOPE_EXTRACT_PROMPT.format(context=text[:8000])
             else:
-                # refinement prompt: ask to improve/clarify previous JSON
-                prompt = (
-                    "이전 출력을 개선하세요. 이전 출력(JSON):\n"
-                    f"{json.dumps(last_items, ensure_ascii=False, indent=2)}\n\n"
-                    "원문 문서:\n"
-                    f"{text[:4000]}\n\n"
-                    "요청: 누락/중복/잘못 매핑된 요구사항을 수정하고, 각 요구사항에 req_id/title/description/type/priority/source_span을 제공하세요. "
-                    "최종 결과는 JSON으로만 반환하세요."
-                )
+                # 재시도: 개선된 refinement prompt
+                prev_req_count = len(last_items.get("requirements", []))
+                
+                prompt = f"""
+    이전 추출 결과에 문제가 있습니다.
 
+    **문제점:**
+    - 추출된 요구사항: {prev_req_count}개 (너무 적음)
+    - 누락된 섹션이 있을 가능성
+
+    **이전 결과:**
+    {json.dumps(last_items, ensure_ascii=False, indent=2)[:2000]}
+
+    **원문 (처음 6000자):**
+    {text[:6000]}
+
+    **개선 요청:**
+    1. 문서 전체를 다시 검토하여 누락된 요구사항 찾기
+    2. 각 섹션에서 최소 1-2개 이상의 요구사항 추출
+    3. 요구사항이 10개 미만이면 더 세분화
+    4. 모든 요구사항에 다음 필드 포함:
+    - req_id, title, description, type, priority, source_span
+    - acceptance_criteria (최소 2개)
+
+    **출력 형식 (JSON만):**
+    {{{{
+    "requirements": [
+        {{{{
+        "req_id": "REQ-001",
+        "title": "...",
+        "type": "functional",
+        "priority": "High",
+        "description": "...",
+        "source_span": "...",
+        "acceptance_criteria": ["...", "..."]
+        }}}}
+    ]
+    }}}}
+    """
+
+            # LLM 호출
             raw_resp = None
             parsed = None
             try:
                 if llm:
-                    logger.info(f"🤖 [SCOPE] LLM 호출 시작1 (프롬프트 길이: {len(prompt)})")
+                    logger.info(f"🤖 [SCOPE] LLM 호출 시작 #5(프롬프트 길이: {len(prompt)})")
                     
-                    # LLM 호출 - 메시지 형식 우선 시도
                     def call():
                         try:
-                            # 1) 메시지 배열 형식으로 먼저 시도 (권장)
                             if hasattr(llm, "invoke"):
-                                logger.debug("[SCOPE] LLM 호출: invoke() 메서드 - 메시지 형식")
                                 messages = [
-                                    {"role": "system", "content": "You are a PM analyst assistant."},
+                                    {"role": "system", "content": "You are a PM analyst assistant. Always return valid JSON."},
                                     {"role": "user", "content": prompt}
                                 ]
                                 return llm.invoke(messages)
-                            
-                            # 2) generate 메서드
-                            if hasattr(llm, "generate"):
-                                logger.debug("[SCOPE] LLM 호출: generate() 메서드")
+                            elif hasattr(llm, "generate"):
                                 return llm.generate(prompt)
-                            
-                            # 3) callable로 직접 호출
-                            if callable(llm):
-                                logger.debug("[SCOPE] LLM 호출: callable 직접 호출")
+                            elif callable(llm):
                                 return llm(prompt)
-                            
-                            logger.warning("[SCOPE] LLM 호출 방법을 찾을 수 없음")
                             return None
                         except Exception as e:
-                            logger.error(f"[SCOPE] LLM 호출 중 예외: {e}")
+                            logger.error(f"[SCOPE] LLM 호출 예외: {e}")
                             raise
 
                     resp = await asyncio.to_thread(call)
                     logger.info(f"✅ [SCOPE] LLM 응답 수신 (타입: {type(resp).__name__})")
                     
-                    # 응답에서 텍스트 추출
                     raw_resp = _safe_extract_raw(resp)
                     logger.info(f"📄 [SCOPE] 응답 텍스트 추출 완료 (길이: {len(str(raw_resp))})")
-                    logger.debug(f"[SCOPE] 응답 내용 (처음 500자):\n{str(raw_resp)[:500]}")
                 else:
                     logger.warning("[SCOPE] LLM 미설정, fallback 사용")
                     return self._fallback_extract(text), None
+                    
             except Exception as e:
                 logger.warning("🟠 [SCOPE] LLM 호출 실패: %s", e)
-                logger.debug(f"[SCOPE] 실패 상세:\n{traceback.format_exc()}")
-                # fallback to rule extraction if first attempt fails
                 if attempt == max_attempts:
                     return self._fallback_extract(text), None
-                last_items = None
-                last_raw = str(e)
                 continue
 
-            # try parse JSON from raw_resp
+            # JSON 파싱
             parsed = _json_from_text(raw_resp)
             confidence = _estimate_confidence(parsed, raw_resp)
-            logger.info("🔵 [SCOPE] parsed=%s, estimated_confidence=%.3f", bool(parsed), confidence)
+            
+            if parsed:
+                req_count = len(parsed.get("requirements", []))
+                logger.info(
+                    "🔵 [SCOPE] parsed=True, requirements=%d, confidence=%.3f",
+                    req_count, confidence
+                )
+            else:
+                logger.warning("🟠 [SCOPE] parsed=False (JSON 파싱 실패)")
 
-            if parsed and confidence >= threshold:
-                logger.info("✅ [SCOPE] confidence threshold met (%.3f >= %.3f) on attempt %d", confidence, threshold, attempt)
+            # Confidence 체크
+            if parsed and confidence >= current_threshold:
+                req_count = len(parsed.get("requirements", []))
+                logger.info(
+                    "✅ [SCOPE] 통과! (confidence %.3f >= %.3f, requirements=%d) on attempt %d",
+                    confidence, current_threshold, req_count, attempt
+                )
                 return parsed, raw_resp
 
-            # If parsed but confidence low, set last_items to parsed and re-prompt for refinement
+            # 재시도 결정
             if parsed:
+                req_count = len(parsed.get("requirements", []))
+                
+                # 요구사항이 0개면 즉시 재시도
+                if req_count == 0:
+                    logger.warning(
+                        "⚠️ [SCOPE] requirements=0개. 즉시 재시도 (attempt %d/%d)",
+                        attempt, max_attempts
+                    )
+                    last_items = None  # 이전 결과 무시
+                    await asyncio.sleep(0.2)
+                    continue
+                
+                # 요구사항이 있지만 confidence 낮음
                 last_items = parsed
                 last_raw = raw_resp
-                # continue loop to refine
-                logger.info("[SCOPE] 재시도: parsed but low confidence (%.3f). 재프롬프트 진행...", confidence)
-                await asyncio.sleep(0.2)  # small backoff
-                continue
+                logger.info(
+                    "[SCOPE] 재시도: confidence %.3f < %.3f (requirements=%d)",
+                    confidence, current_threshold, req_count
+                )
+                await asyncio.sleep(0.2)
+            else:
+                # 파싱 실패
+                logger.warning("[SCOPE] 재시도: JSON 파싱 실패")
+                last_items = None
+                last_raw = raw_resp
+                await asyncio.sleep(0.2)
 
-            # If not parsed (no JSON), provide guidance and try again
-            logger.info("[SCOPE] JSON 파싱 실패 혹은 포맷 오류 — 재시도합니다 (attempt %d)", attempt)
-            # create a clarifying prompt forcing JSON output
-            last_items = None
-            last_raw = raw_resp
-            await asyncio.sleep(0.2)
-            continue
-
-        # after attempts exhausted, fallback to parsed if any, else rule-based
-        if last_items:
-            logger.warning("[SCOPE] 최대 시도(%d) 도달: 마지막 parsed 사용 (confidence %.3f)", max_attempts, _estimate_confidence(last_items, last_raw))
+        # 최대 시도 도달
+        if last_items and len(last_items.get("requirements", [])) > 0:
+            req_count = len(last_items.get("requirements", []))
+            logger.warning(
+                "[SCOPE] 최대 시도(%d) 도달: 마지막 결과 사용 (requirements=%d, confidence %.3f)",
+                max_attempts, req_count, confidence
+            )
             return last_items, last_raw
-        logger.warning("[SCOPE] 최대 시도(%d) 도달: fallback 규칙 기반 사용", max_attempts)
-        return self._fallback_extract(text), last_raw
+        else:
+            logger.error("[SCOPE] 최대 시도(%d) 도달: 유효한 결과 없음. fallback 사용", max_attempts)
+            return self._fallback_extract(text), None
+
 
     def _fallback_extract(self, text: str) -> Dict[str, Any]:
         """간단 규칙 기반 (기존 fallback 유지)"""
@@ -543,3 +725,397 @@ class ScopeAgent:
             outputs["scope_statement_excel"] = None
             logger.debug("ScopeStatementGenerator not available: %s", e)
         return outputs
+    
+    # ScopeAgent에 추가할 메서드들
+    # pipeline.py의 ScopeAgent 클래스에 추가
+
+    def refine_requirements(self, 
+                        text: str, 
+                        previous_result: List[Dict[str, Any]],
+                        validation_result: Dict[str, Any],
+                        project_meta: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        검증 피드백을 반영한 요구사항 재추출
+        
+        Args:
+            text: 원본 문서
+            previous_result: 이전 추출 결과
+            validation_result: 품질 검증 결과
+            project_meta: 프로젝트 메타데이터
+        
+        Returns:
+            개선된 요구사항 리스트
+        """
+        logger.info("[SCOPE] 피드백 기반 재추출 시작")
+        
+        # 검증 결과 분석
+        score = validation_result.get('score', 0)
+        issues = validation_result.get('issues', [])
+        missing = validation_result.get('missing_requirements', [])
+        recommendations = validation_result.get('recommendations', [])
+        
+        logger.info(f"[SCOPE] 이전 점수: {score}")
+        logger.info(f"[SCOPE] 이슈: {len(issues)}개")
+        logger.info(f"[SCOPE] 누락: {len(missing)}개")
+        
+        # 피드백 프롬프트 생성
+        feedback_section = self._build_feedback_section(
+            score, issues, missing, recommendations
+        )
+        
+        # 개선된 프롬프트 생성
+        refinement_prompt = f"""
+    당신은 PMP 표준을 준수하는 전문 PMO 분석가입니다.
+
+    ## 🔄 요구사항 개선 작업
+
+    ### 이전 추출 결과
+    추출된 요구사항: {len(previous_result)}개
+    품질 점수: {score}/100
+
+    ### 📋 이전 추출 결과 (요약)
+    {self._summarize_requirements(previous_result)}
+
+    ### ⚠️ 검증에서 발견된 문제점
+
+    {feedback_section}
+
+    ### 🎯 개선 지침
+
+    1. **누락된 요구사항 추가**
+    {self._format_missing(missing)}
+
+    2. **기존 요구사항 개선**
+    {self._format_issues(issues)}
+
+    3. **권장사항 반영**
+    {self._format_recommendations(recommendations)}
+
+    ### 📝 개선 원칙
+
+    - 모호한 표현 제거: "적절히", "충분히" → 구체적 기준
+    - 측정 가능성: 모든 요구사항에 정량적 기준 포함
+    - acceptance_criteria: 최소 3개 이상, 각각 검증 가능
+    - 세분화: 하나의 요구사항 = 하나의 기능
+
+    ---
+
+    ## 📄 원문 문서
+    {text[:6000]}
+
+    ---
+
+    위 피드백을 반영하여 요구사항을 개선하세요.
+    기존 요구사항은 유지하되, 문제가 있는 부분은 수정하고, 누락된 부분은 추가하세요.
+
+    출력 JSON:
+    {{{{
+    "requirements": [
+        {{{{
+        "req_id": "REQ-001",
+        "title": "...",
+        "type": "functional",
+        "priority": "High",
+        "description": "...",
+        "source_span": "...",
+        "acceptance_criteria": [...]
+        }}}}
+    ]
+    }}}}
+    """
+        
+        # LLM 호출
+        try:
+            messages = [
+                {"role": "system", "content": "You are a PM analyst expert in requirements refinement."},
+                {"role": "user", "content": refinement_prompt}
+            ]
+            
+            logger.info("[SCOPE] LLM 재추출 호출")
+            resp = self.llm.invoke(messages)
+            content = _safe_extract_raw(resp)
+            
+            logger.info(f"[SCOPE] 응답 길이: {len(content)}")
+            
+            # JSON 파싱
+            json_text = _json_first(content)
+            if not json_text:
+                logger.warning("[SCOPE] JSON 추출 실패, 이전 결과 반환")
+                return previous_result
+            
+            result = _postprocess(json_text, text)
+            
+            logger.info(f"[SCOPE] 재추출 완료: {len(result)}개 요구사항")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[SCOPE] 재추출 실패: {e}")
+            return previous_result
+
+
+    def _build_feedback_section(self, score, issues, missing, recommendations):
+        """피드백 섹션 생성"""
+        
+        sections = []
+        
+        # 점수 및 등급
+        if score < 60:
+            grade = "Poor"
+            emoji = "❌"
+        elif score < 75:
+            grade = "Fair"
+            emoji = "⚠️"
+        elif score < 90:
+            grade = "Good"
+            emoji = "✅"
+        else:
+            grade = "Excellent"
+            emoji = "🌟"
+        
+        sections.append(f"{emoji} 품질 등급: {grade} ({score}/100)")
+        
+        # 이슈
+        if issues:
+            sections.append(f"\n**발견된 이슈 ({len(issues)}개):**")
+            for i, issue in enumerate(issues[:10], 1):
+                sections.append(f"{i}. {issue}")
+        
+        # 누락
+        if missing:
+            sections.append(f"\n**누락된 요구사항 ({len(missing)}개):**")
+            for i, miss in enumerate(missing[:5], 1):
+                sections.append(f"{i}. {miss}")
+        
+        # 권장사항
+        if recommendations:
+            sections.append(f"\n**개선 권장사항 ({len(recommendations)}개):**")
+            for i, rec in enumerate(recommendations[:5], 1):
+                sections.append(f"{i}. {rec}")
+        
+        return "\n".join(sections)
+
+
+    def _summarize_requirements(self, requirements):
+        """요구사항 요약"""
+        
+        if not requirements:
+            return "없음"
+        
+        summary = []
+        for req in requirements[:10]:
+            summary.append(
+                f"- {req.get('req_id')}: {req.get('title')} "
+                f"({req.get('type')}, {req.get('priority')})"
+            )
+        
+        if len(requirements) > 10:
+            summary.append(f"... 외 {len(requirements) - 10}개")
+        
+        return "\n".join(summary)
+
+
+    def _format_missing(self, missing):
+        """누락 항목 포맷팅"""
+        
+        if not missing:
+            return "없음"
+        
+        formatted = []
+        for i, miss in enumerate(missing, 1):
+            formatted.append(f"   {i}. {miss}")
+        
+        return "\n".join(formatted)
+
+
+    def _format_issues(self, issues):
+        """이슈 포맷팅"""
+        
+        if not issues:
+            return "없음"
+        
+        formatted = []
+        for i, issue in enumerate(issues[:10], 1):
+            formatted.append(f"   {i}. {issue}")
+        
+        return "\n".join(formatted)
+
+
+    def _format_recommendations(self, recommendations):
+        """권장사항 포맷팅"""
+        
+        if not recommendations:
+            return "없음"
+        
+        formatted = []
+        for i, rec in enumerate(recommendations[:5], 1):
+            formatted.append(f"   {i}. {rec}")
+        
+        return "\n".join(formatted)
+
+
+    # ============================================================================
+    # extract_with_validation 함수 개선 버전
+    # ============================================================================
+
+    def extract_with_validation_v2(scope_agent, 
+                                quality_agent,
+                                text: str, 
+                                project_meta: Optional[Dict] = None,
+                                max_attempts: int = 3,
+                                strategy: str = "auto") -> Dict[str, Any]:
+        """
+        검증 기반 요구사항 추출 (개선 버전)
+        
+        Args:
+            scope_agent: ScopeAgent 인스턴스
+            quality_agent: QualityAgent 인스턴스
+            text: 원본 문서
+            project_meta: 프로젝트 메타데이터
+            max_attempts: 최대 시도 횟수
+            strategy: 재추출 전략 ("auto", "feedback", "staged", "examples")
+        
+        Returns:
+            {
+                "success": bool,
+                "requirements": [...],
+                "validation": {...},
+                "attempts": int,
+                "improvements": [...],
+                "history": [...]
+            }
+        """
+        logger.info(f"\n{'='*70}")
+        logger.info(f"🚀 검증 기반 추출 프로세스 시작 (개선 버전)")
+        logger.info(f"📝 문서 길이: {len(text)} 문자")
+        logger.info(f"🔄 최대 시도: {max_attempts}회")
+        logger.info(f"📋 전략: {strategy}")
+        logger.info(f"{'='*70}\n")
+        
+        history = []
+        improvements = []
+        previous_result = None
+        validation_result = None
+        
+        for attempt in range(1, max_attempts + 1):
+            logger.info(f"\n{'─'*70}")
+            logger.info(f"📝 시도 #{attempt}/{max_attempts}")
+            logger.info(f"{'─'*70}")
+            
+            # 1. 요구사항 추출
+            if attempt == 1:
+                # 첫 시도: 일반 추출
+                logger.info("🔍 초기 추출 수행")
+                result = scope_agent.analyze_rfp(text, project_meta)
+                method = "initial"
+            else:
+                # 재시도: 피드백 반영 재추출
+                logger.info(f"🔄 피드백 기반 재추출 수행")
+                logger.info(f"   이전 점수: {validation_result['score']:.1f}")
+                logger.info(f"   이슈: {len(validation_result['issues'])}개")
+                logger.info(f"   누락: {len(validation_result['missing_requirements'])}개")
+                
+                # refine_requirements 메서드 호출
+                result = scope_agent.refine_requirements(
+                    text, 
+                    previous_result, 
+                    validation_result,
+                    project_meta
+                )
+                method = "refined"
+            
+            # 결과 정규화
+            requirements = result if isinstance(result, list) else result.get('requirements', [])
+            logger.info(f"✅ {len(requirements)}개 요구사항 추출 완료")
+            
+            # 2. 품질 검증
+            logger.info("🔍 품질 검증 시작")
+            validation_result = quality_agent.validate(requirements, text, project_meta)
+            
+            current_score = validation_result['score']
+            logger.info(f"🎯 점수: {current_score:.1f} ({validation_result['grade']})")
+            
+            # 개선도 계산
+            if previous_result:
+                prev_score = history[-1]['validation']['score']
+                improvement = current_score - prev_score
+                improvements.append(improvement)
+                logger.info(f"📈 개선도: {improvement:+.1f}점")
+            
+            # 히스토리 저장
+            history.append({
+                "attempt": attempt,
+                "method": method,
+                "requirements_count": len(requirements),
+                "validation": validation_result,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # 3. 통과 여부 확인
+            if validation_result['pass']:
+                logger.info(f"\n{'='*70}")
+                logger.info(f"✅ 검증 통과! (시도 {attempt}회)")
+                logger.info(f"🎯 최종 점수: {current_score:.1f}")
+                logger.info(f"🏆 등급: {validation_result['grade']}")
+                
+                if attempt > 1:
+                    total_improvement = current_score - history[0]['validation']['score']
+                    logger.info(f"📈 총 개선: {total_improvement:+.1f}점")
+                
+                logger.info(f"{'='*70}\n")
+                
+                return {
+                    "success": True,
+                    "requirements": requirements,
+                    "validation": validation_result,
+                    "attempts": attempt,
+                    "method": method,
+                    "improvements": improvements,
+                    "history": history,
+                    "message": f"검증 통과 (시도 {attempt}회, 최종 점수 {current_score:.1f})"
+                }
+            
+            # 검증 실패
+            logger.warning(f"\n⚠️ 검증 미통과")
+            logger.warning(f"   점수: {current_score:.1f} (기준: {quality_agent.threshold})")
+            logger.warning(f"   등급: {validation_result['grade']}")
+            
+            if validation_result['issues']:
+                logger.warning(f"\n📋 주요 이슈:")
+                for i, issue in enumerate(validation_result['issues'][:5], 1):
+                    logger.warning(f"   {i}. {issue}")
+            
+            if validation_result['missing_requirements']:
+                logger.warning(f"\n📋 누락 항목:")
+                for i, miss in enumerate(validation_result['missing_requirements'][:3], 1):
+                    logger.warning(f"   {i}. {miss}")
+            
+            # 마지막 시도 전 경고
+            if attempt == max_attempts - 1:
+                logger.warning(f"\n⚠️ 마지막 시도 전입니다!")
+            
+            previous_result = requirements
+        
+        # 최대 시도 횟수 초과
+        final_score = validation_result['score']
+        logger.error(f"\n{'='*70}")
+        logger.error(f"❌ {max_attempts}회 시도 후에도 검증 기준 미달")
+        logger.error(f"   최종 점수: {final_score:.1f} (기준: {quality_agent.threshold})")
+        logger.error(f"   최종 등급: {validation_result['grade']}")
+        
+        if improvements:
+            avg_improvement = sum(improvements) / len(improvements)
+            logger.error(f"   평균 개선: {avg_improvement:+.1f}점/시도")
+        
+        logger.error(f"{'='*70}\n")
+        
+        return {
+            "success": False,
+            "requirements": requirements,
+            "validation": validation_result,
+            "attempts": max_attempts,
+            "method": method,
+            "improvements": improvements,
+            "history": history,
+            "message": f"품질 기준 미달 (최종 {final_score:.1f}점)"
+        }
