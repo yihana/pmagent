@@ -5,7 +5,6 @@ import json
 import asyncio
 import time
 import logging
-import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,17 +21,17 @@ except Exception:
 아래 문서에서 요구사항(requirements), 관련 기능(functions), 산출물(deliverables), 승인기준(acceptance_criteria)을 구조화하여 JSON으로 추출하세요.
 요구사항은 고유 아이디(req_id)를 부여하세요 (예: REQ-001).
 출력 예시:
-{{
-  "requirements":[{{"req_id":"REQ-001","title":"...","type":"functional","priority":"High","description":"...","source_span":"..."}}],
+{
+  "requirements":[{"req_id":"REQ-001","title":"...","type":"functional","priority":"High","description":"...","source_span":"..."}],
   "functions": [],
   "deliverables": [],
   "acceptance_criteria": []
-}}
+}
 문서:
 {context}
 """
-    RTM_PROMPT = "RTM mapping for requirements: {{requirements}}"
-    WBS_SYNTHESIS_PROMPT = "WBS synthesis for items: {{items}}"
+    RTM_PROMPT = "RTM mapping for requirements: {requirements}"
+    WBS_SYNTHESIS_PROMPT = "WBS synthesis for items: {items}"
 
 # DB imports (optional)
 try:
@@ -63,56 +62,32 @@ def _safe_extract_raw(resp: Any) -> str:
     try:
         if resp is None:
             return ""
-        
-        # 이미 문자열인 경우 바로 반환 (가장 흔한 케이스)
-        if isinstance(resp, str):
-            logger.debug("[SCOPE] LLM 응답이 이미 문자열입니다")
-            return resp
-        
         # langchain/chat model-like: resp.generations / resp.generations[0].message.content
         if hasattr(resp, "generations"):
             gens = getattr(resp, "generations")
             try:
                 # try to flatten common shapes
                 if isinstance(gens, list) and len(gens) and hasattr(gens[0], "message"):
-                    content = gens[0].message.content
-                    logger.debug("[SCOPE] LLM 응답 추출: generations[0].message.content")
-                    return content
+                    return gens[0].message.content
             except Exception:
                 pass
-        
         # Azure / OpenAI-like: resp.choices[0].message.content or resp.choices[0].text
         if hasattr(resp, "choices"):
             c = resp.choices
             if isinstance(c, (list, tuple)) and len(c):
                 first = c[0]
-                if hasattr(first, "message"):
-                    if hasattr(first.message, "get"):
-                        content = first.message.get("content", "")
-                    elif hasattr(first.message, "content"):
-                        content = first.message.content
-                    else:
-                        content = str(first.message)
-                    logger.debug("[SCOPE] LLM 응답 추출: choices[0].message")
-                    return content
+                if hasattr(first, "message") and hasattr(first.message, "get"):
+                    return first.message.get("content", "")
                 if hasattr(first, "text"):
-                    content = getattr(first, "text", "")
-                    logger.debug("[SCOPE] LLM 응답 추출: choices[0].text")
-                    return content
-        
-        # some SDKs use .content directly
+                    return getattr(first, "text", "")
+        # some SDKs use .content
         if hasattr(resp, "content"):
-            content = getattr(resp, "content")
-            logger.debug("[SCOPE] LLM 응답 추출: .content 속성")
-            return content if isinstance(content, str) else str(content)
-        
-        # fallback to string conversion
-        result = str(resp)
-        logger.debug("[SCOPE] LLM 응답 추출: str() 변환")
-        return result
+            return getattr(resp, "content")
+        # fallback to string
+        return str(resp)
     except Exception as e:
-        logger.warning("[SCOPE] raw extract failed: %s", e)
-        return str(resp) if resp else ""
+        logger.debug("[SCOPE] raw extract failed: %s", e)
+        return str(resp)
 
 def _json_from_text(maybe: str) -> Optional[dict]:
     """문자열에서 최초 JSON 객체(중괄호)를 추출해 파싱 시도."""
@@ -183,10 +158,8 @@ class ScopeAgent:
          - max_attempts: int, default=3
     """
 
-    def __init__(self, data_dir: Optional[str] = None):
+    def __init__(self):
         self.llm = get_llm()
-        self.data_dir = data_dir or "data"
-        logger.info(f"[SCOPE_AGENT] 초기화 완료 - data_dir: {self.data_dir}")
 
     async def pipeline(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         project_id = payload.get("project_id") or payload.get("project_name") or "Unknown"
@@ -313,49 +286,27 @@ class ScopeAgent:
             parsed = None
             try:
                 if llm:
-                    logger.info(f"🤖 [SCOPE] LLM 호출 시작1 (프롬프트 길이: {len(prompt)})")
-                    
-                    # LLM 호출 - 메시지 형식 우선 시도
+                    # flexible invocation - supports sync/async SDKs via to_thread
                     def call():
                         try:
-                            # 1) 메시지 배열 형식으로 먼저 시도 (권장)
-                            if hasattr(llm, "invoke"):
-                                logger.debug("[SCOPE] LLM 호출: invoke() 메서드 - 메시지 형식")
-                                messages = [
-                                    {"role": "system", "content": "You are a PM analyst assistant."},
-                                    {"role": "user", "content": prompt}
-                                ]
-                                return llm.invoke(messages)
-                            
-                            # 2) generate 메서드
                             if hasattr(llm, "generate"):
-                                logger.debug("[SCOPE] LLM 호출: generate() 메서드")
                                 return llm.generate(prompt)
-                            
-                            # 3) callable로 직접 호출
                             if callable(llm):
-                                logger.debug("[SCOPE] LLM 호출: callable 직접 호출")
                                 return llm(prompt)
-                            
-                            logger.warning("[SCOPE] LLM 호출 방법을 찾을 수 없음")
-                            return None
+                            if hasattr(llm, "invoke"):
+                                return llm.invoke(prompt)
+                            return llm  # unlikely
                         except Exception as e:
-                            logger.error(f"[SCOPE] LLM 호출 중 예외: {e}")
                             raise
 
                     resp = await asyncio.to_thread(call)
-                    logger.info(f"✅ [SCOPE] LLM 응답 수신 (타입: {type(resp).__name__})")
-                    
-                    # 응답에서 텍스트 추출
                     raw_resp = _safe_extract_raw(resp)
-                    logger.info(f"📄 [SCOPE] 응답 텍스트 추출 완료 (길이: {len(str(raw_resp))})")
-                    logger.debug(f"[SCOPE] 응답 내용 (처음 500자):\n{str(raw_resp)[:500]}")
+                    logger.debug("[SCOPE] LLM raw (len=%d)", len(str(raw_resp)))
                 else:
                     logger.warning("[SCOPE] LLM 미설정, fallback 사용")
                     return self._fallback_extract(text), None
             except Exception as e:
                 logger.warning("🟠 [SCOPE] LLM 호출 실패: %s", e)
-                logger.debug(f"[SCOPE] 실패 상세:\n{traceback.format_exc()}")
                 # fallback to rule extraction if first attempt fails
                 if attempt == max_attempts:
                     return self._fallback_extract(text), None

@@ -1,19 +1,10 @@
 # server/workflow/agents/pm_analyzer.py
 from __future__ import annotations
 
-import json
-import re
-import logging
+import json, re
 from typing import Any, Dict, List, Optional
 
 from server.utils.config import get_llm
-
-# 로거 설정
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 
 ACTION_ITEM_SCHEMA = {
     "type": "array",
@@ -37,20 +28,12 @@ ACTION_ITEM_SCHEMA = {
 }
 
 def _json_first(text: str) -> Optional[str]:
-    logger.debug(f"_json_first 호출 - 입력 텍스트 길이: {len(text)}")
     m = re.search(r"```json\s*(\{.*?\}|\[.*?\])\s*```", text, re.S | re.I)
-    if m: 
-        logger.info("JSON 코드 블록 발견")
-        return m.group(1)
+    if m: return m.group(1)
     m = re.search(r"(\[.*?\])", text, re.S)
-    if m: 
-        logger.info("JSON 배열 발견")
-        return m.group(1)
+    if m: return m.group(1)
     m = re.search(r"(\{.*?\})", text, re.S)
-    if m: 
-        logger.info("JSON 객체 발견")
-        return m.group(1)
-    logger.warning("JSON 형식을 찾을 수 없음")
+    if m: return m.group(1)
     return None
 
 def _normalize(d: Dict[str, Any], original: str) -> Dict[str, Any]:
@@ -80,7 +63,6 @@ def _normalize(d: Dict[str, Any], original: str) -> Dict[str, Any]:
     }
 
 def _fallback_rules(text: str) -> List[Dict[str, Any]]:
-    logger.warning("폴백 규칙 사용 - LLM 응답을 파싱하지 못함")
     out: List[Dict[str, Any]] = []
     for line in text.splitlines():
         s = line.strip()
@@ -88,23 +70,16 @@ def _fallback_rules(text: str) -> List[Dict[str, Any]]:
         if any(k in s for k in ["해야", "진행", "완료", "반영", "적용", "수정", "작성", "검증", "테스트"]):
             out.append(_normalize({"task": s}, text))
             if len(out) >= 50: break
-    logger.info(f"폴백 규칙으로 {len(out)}개 항목 추출")
     return out
 
 def _postprocess(json_text: str, original: str) -> List[Dict[str, Any]]:
-    logger.info("JSON 후처리 시작")
     try:
         arr = json.loads(json_text)
         if isinstance(arr, list):
-            result = [_normalize(x, original) for x in arr][:200]
-            logger.info(f"✅ JSON 배열 파싱 성공: {len(result)}개 항목")
-            return result
+            return [_normalize(x, original) for x in arr][:200]
         if isinstance(arr, dict) and isinstance(arr.get("items"), list):
-            result = [_normalize(x, original) for x in arr["items"]][:200]
-            logger.info(f"✅ JSON 객체(items 키) 파싱 성공: {len(result)}개 항목")
-            return result
-    except Exception as e:
-        logger.error(f"❌ JSON 파싱 실패: {e}")
+            return [_normalize(x, original) for x in arr["items"]][:200]
+    except Exception:
         pass
     return _fallback_rules(original)
 
@@ -131,7 +106,6 @@ def _make_user_prompt(text: str, project_meta: Optional[Dict[str, Any]] = None) 
 class PM_AnalyzerAgent:
     """추상 상속 없이 동작하는 구체 구현"""
     def __init__(self, model_name: str = "gpt-5", temperature: float = 0.2):
-        logger.info(f"🚀 PM_AnalyzerAgent 초기화 - model: {model_name}, temp: {temperature}")
         self.model_name = model_name
         self.temperature = temperature
 
@@ -145,108 +119,65 @@ class PM_AnalyzerAgent:
         # 1) model_name + temperature
         if not is_nano:
             try:
-                logger.info("시도 1: model_name + temperature")
                 self.llm = get_llm(model_name=model_name, temperature=temperature)
-                logger.info("✅ LLM 초기화 성공 (model_name + temperature)")
             except TypeError as e:
-                logger.warning(f"시도 1 실패: {e}")
                 last_err = e
 
         # 2) temperature만
         if self.llm is None and not is_nano:
             try:
-                logger.info("시도 2: temperature만")
                 self.llm = get_llm(temperature=temperature)
-                logger.info("✅ LLM 초기화 성공 (temperature만)")
             except TypeError as e:
-                logger.warning(f"시도 2 실패: {e}")
                 last_err = e
 
         # 3) model_name만
         if self.llm is None:
             try:
-                logger.info("시도 3: model_name만")
                 self.llm = get_llm(model_name=model_name)
-                logger.info("✅ LLM 초기화 성공 (model_name만)")
             except TypeError as e:
-                logger.warning(f"시도 3 실패: {e}")
                 last_err = e
 
         # 4) 어떤 인자도 없이
         if self.llm is None:
             try:
-                logger.info("시도 4: 인자 없이")
                 self.llm = get_llm()
-                logger.info("✅ LLM 초기화 성공 (인자 없이)")
             except TypeError as e:
-                logger.error(f"시도 4 실패: {e}")
                 last_err = e
 
         if self.llm is None:
             # 여기까지 오면 시그니처가 완전히 다른 케이스 → 에러 메시지 투명하게 반환
-            error_msg = f"get_llm() 호출 실패: 마지막 오류 = {last_err}"
-            logger.error(f"❌ {error_msg}")
-            raise TypeError(error_msg)
+            raise TypeError(f"get_llm() 호출 실패: 마지막 오류 = {last_err}")
 
     def _run(self, doc_kind: str, text: str, project_meta: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        logger.info(f"{'='*60}")
-        logger.info(f"🔍 분석 시작 - 문서 유형: {doc_kind}")
-        logger.info(f"📄 입력 텍스트 길이: {len(text)} 문자")
-        
         sys_prompt = _make_system_prompt(doc_kind)
         user_prompt = _make_user_prompt(text, project_meta)
-        
-        logger.info(f"📝 시스템 프롬프트 길이: {len(sys_prompt)} 문자")
-        logger.info(f"📝 사용자 프롬프트 길이: {len(user_prompt)} 문자")
-        
         try:
-            logger.info("🤖 LLM 호출 시작 (메시지 형식)...")
             messages = [
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
             ]
             resp = self.llm.invoke(messages)
             content = getattr(resp, "content", None) or str(resp)
-            logger.info(f"✅ LLM 응답 수신 - 길이: {len(content)} 문자")
-            logger.debug(f"LLM 응답 내용 (처음 500자):\n{content[:500]}")
-            
-        except Exception as e1:
-            logger.warning(f"⚠️ 메시지 형식 실패: {e1}")
+        except Exception:
             try:
-                logger.info("🤖 LLM 호출 재시도 (단일 프롬프트 형식)...")
                 prompt = sys_prompt + "\n\n" + user_prompt
                 content = self.llm.invoke(prompt)
                 content = getattr(content, "content", None) or str(content)
-                logger.info(f"✅ LLM 응답 수신 (재시도) - 길이: {len(content)} 문자")
-                logger.debug(f"LLM 응답 내용 (처음 500자):\n{content[:500]}")
-                
-            except Exception as e2:
-                logger.error(f"❌ LLM 호출 완전 실패: {e2}")
-                logger.info("폴백 규칙으로 전환")
+            except Exception:
                 return _fallback_rules(text)
-        
         j = _json_first(content or "")
         if not j:
-            logger.warning("⚠️ JSON 추출 실패")
             return _fallback_rules(text)
-        
-        result = _postprocess(j, text)
-        logger.info(f"✅ 분석 완료 - 총 {len(result)}개 항목 추출")
-        logger.info(f"{'='*60}\n")
-        return result
+        return _postprocess(j, text)
 
     def analyze_minutes(self, text: str, project_meta: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        logger.info("📋 회의록 분석 요청")
         return self._run("meeting minutes", text, project_meta)
 
     def analyze_rfp(self, text: str, project_meta: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        logger.info("📋 RFP 분석 요청")
         return self._run("RFP", text, project_meta)
 
     def analyze_proposal(self, text: str, project_meta: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        logger.info("📋 제안서 분석 요청")
         return self._run("proposal", text, project_meta)
 
     def analyze_issue(self, text: str, project_meta: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        logger.info("📋 이슈 로그 분석 요청")
         return self._run("issue log", text, project_meta)

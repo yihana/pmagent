@@ -313,40 +313,28 @@ class ScopeAgent:
             parsed = None
             try:
                 if llm:
-                    logger.info(f"🤖 [SCOPE] LLM 호출 시작1 (프롬프트 길이: {len(prompt)})")
-                    
-                    # LLM 호출 - 메시지 형식 우선 시도
+                    # flexible invocation - supports sync/async SDKs via to_thread
                     def call():
                         try:
-                            # 1) 메시지 배열 형식으로 먼저 시도 (권장)
-                            if hasattr(llm, "invoke"):
-                                logger.debug("[SCOPE] LLM 호출: invoke() 메서드 - 메시지 형식")
-                                messages = [
-                                    {"role": "system", "content": "You are a PM analyst assistant."},
-                                    {"role": "user", "content": prompt}
-                                ]
-                                return llm.invoke(messages)
-                            
-                            # 2) generate 메서드
                             if hasattr(llm, "generate"):
-                                logger.debug("[SCOPE] LLM 호출: generate() 메서드")
+                                logger.debug("[SCOPE] LLM 호출: generate() 메서드 사용")
                                 return llm.generate(prompt)
-                            
-                            # 3) callable로 직접 호출
                             if callable(llm):
                                 logger.debug("[SCOPE] LLM 호출: callable 직접 호출")
                                 return llm(prompt)
-                            
+                            if hasattr(llm, "invoke"):
+                                logger.debug("[SCOPE] LLM 호출: invoke() 메서드 사용")
+                                return llm.invoke(prompt)
                             logger.warning("[SCOPE] LLM 호출 방법을 찾을 수 없음")
-                            return None
+                            return llm  # unlikely
                         except Exception as e:
                             logger.error(f"[SCOPE] LLM 호출 중 예외: {e}")
                             raise
 
+                    logger.info(f"🤖 [SCOPE] LLM 호출 시작 (프롬프트 길이: {len(prompt)})")
                     resp = await asyncio.to_thread(call)
                     logger.info(f"✅ [SCOPE] LLM 응답 수신 (타입: {type(resp).__name__})")
                     
-                    # 응답에서 텍스트 추출
                     raw_resp = _safe_extract_raw(resp)
                     logger.info(f"📄 [SCOPE] 응답 텍스트 추출 완료 (길이: {len(str(raw_resp))})")
                     logger.debug(f"[SCOPE] 응답 내용 (처음 500자):\n{str(raw_resp)[:500]}")

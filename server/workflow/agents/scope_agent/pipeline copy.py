@@ -323,6 +323,9 @@ class ScopeAgent:
                 acc.append({"id": f"ACC-{idx:03d}", "title": para[:80], "description": para}); idx += 1
         return {"requirements": reqs, "functions": funcs, "deliverables": dels, "acceptance_criteria": acc}
 
+    # -------------------------
+    # DB Save (safe)
+    # -------------------------
     def _save_requirements_db(self, project_id: Any, requirements: List[Dict[str, Any]]):
         """Insert or update PM_Requirement rows"""
         if not _HAS_DB or pm_models is None:
