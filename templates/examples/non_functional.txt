@@ -1,0 +1,13 @@
+예시: Non-functional 요구사항
+
+{
+  "req_id": "REQ-010",
+  "title": "API 응답 시간",
+  "type": "non-functional",
+  "priority": "High",
+  "description": "모든 API 응답은 평균 1초 이내여야 한다.",
+  "acceptance_criteria": [
+    "95 percentile 응답 1초 이하",
+    "DB 캐시 적용"
+  ]
+}

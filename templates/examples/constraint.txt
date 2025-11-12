@@ -1,0 +1,9 @@
+예시: Constraint 요구사항
+
+{
+  "req_id": "REQ-020",
+  "title": "기술 스택 제약",
+  "type": "constraint",
+  "priority": "High",
+  "description": "백엔드는 Python/FastAPI를 사용해야 한다."
+}

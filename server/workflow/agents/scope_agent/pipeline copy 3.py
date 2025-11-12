@@ -458,50 +458,6 @@ class ScopeAgent:
         # PMP outputs (scope_statement excel etc.) - keep existing hooks
         pmp_outputs = await self._generate_pmp_outputs(project_id, items, wbs, options, out_dir)
 
-        # 1112
-        # === Scope manifest (연결점) ===
-        scope_manifest = {
-            "project_id": project_id,
-            "generated_at": datetime.now().isoformat(),
-            # "outputs": {
-                # "requirements": str(out_dir / "requirements.json"),
-                # "wbs_draft": str(out_dir / "wbs_structure.json"),
-                # "charter": str(out_dir / "project_charter.md"),
-                # "tailoring": str(out_dir / "tailoring_guide.json"),
-            "outputs": {
-                "requirements": str(out_dir / "requirements.json"),
-                "wbs_draft": str(out_dir / "wbs_structure.json"),
-                "charter": str(out_dir / f"{project_id}_프로젝트헌장.docx"),
-                "tailoring": str(out_dir / f"{project_id}_테일러링.xlsx"),
-                "scope_statement": str(out_dir / f"{project_id}_범위기술서.xlsx"),
-                "rtm": str(out_dir / f"{project_id}_요구사항추적표.xlsx"),
-                "project_plan": str(out_dir / f"{project_id}_사업수행계획서.xlsx"),
-            },                
-            "stats": {
-                "requirements": len(items.get("requirements", [])),
-                "functional": sum(1 for r in items.get("requirements", []) if r.get("type") in ("functional","기능")),
-                "non_functional": sum(1 for r in items.get("requirements", []) if r.get("type") in ("non-functional","비기능")),
-                "constraints": sum(1 for r in items.get("requirements", []) if r.get("type") in ("constraint","제약")),
-            }
-        }
-        (scope_dir := out_dir).mkdir(parents=True, exist_ok=True)
-        (scope_dir / "scope_manifest.json").write_text(json.dumps(scope_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        # === 상위 제안서 매니페스트(최초 생성/갱신) ===
-        proposal_dir = Path("data/outputs/proposal") / str(project_id)
-        proposal_dir.mkdir(parents=True, exist_ok=True)
-        proposal_manifest_path = proposal_dir / "manifest.json"
-        base = {"project_id": project_id, "scope": {}, "schedule": {}, "generated_at": datetime.now().isoformat()}
-        if proposal_manifest_path.exists():
-            try:
-                base = json.loads(proposal_manifest_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
-        base["scope"] = scope_manifest
-        proposal_manifest_path.write_text(json.dumps(base, ensure_ascii=False, indent=2), encoding="utf-8")
-        logger.info(f"[SCOPE] 📦 manifest 생성 완료: {proposal_manifest_path}")
-
-
         result = {
             "status": "ok",
             "project_id": project_id,

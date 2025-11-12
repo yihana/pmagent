@@ -1,0 +1,14 @@
+예시: Functional 요구사항
+
+{
+  "req_id": "REQ-001",
+  "title": "이메일 회원가입",
+  "type": "functional",
+  "priority": "High",
+  "description": "사용자는 이메일과 비밀번호를 입력하여 계정을 생성할 수 있어야 한다.",
+  "acceptance_criteria": [
+    "이메일 형식 검증",
+    "중복 이메일 가입 방지",
+    "비밀번호 8자 이상"
+  ]
+}

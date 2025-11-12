@@ -1,0 +1,11 @@
+입력 예시:
+"기술 제약사항을 정의하세요."
+
+출력 예시(JSON):
+{
+  "req_id": "REQ-020",
+  "title": "데이터베이스 제약",
+  "type": "constraint",
+  "priority": "High",
+  "description": "PostgreSQL을 사용해야 한다."
+}

@@ -1,9 +1,22 @@
 import streamlit as st
-from langchain.schema import Document
 from typing import List, Literal
 from duckduckgo_search import DDGS
-from langchain.schema import HumanMessage, SystemMessage
 from server.utils.config import get_llm
+
+try:
+    # ✅ 최신 LangChain 구조 (0.1.x 이상)
+    from langchain_core.documents import Document
+except ImportError:
+    # ✅ 구버전 호환
+    from langchain.schema import Document
+
+try:
+    # ✅ 최신 LangChain 구조 (0.1.x 이상)
+    from langchain_core.messages import HumanMessage, SystemMessage
+except ImportError:
+    # ✅ 구버전 호환
+    from langchain.schema import HumanMessage, SystemMessage
+
 
 
 def improve_search_query(

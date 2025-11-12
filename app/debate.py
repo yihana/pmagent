@@ -1,7 +1,12 @@
 import streamlit as st
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
-
 from utils.config import get_llm
+
+try:
+    # ✅ 최신 버전 (LangChain 0.1.x 이상)
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+except ImportError:
+    # ✅ 구버전 호환
+    from langchain.schema import HumanMessage, SystemMessage, AIMessage
 
 
 # AI 응답 생성 함수 (메시지 히스토리 포함)

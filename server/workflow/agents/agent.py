@@ -1,4 +1,3 @@
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from server.retrieval.vector_store import search_topic
 from server.utils.config import get_llm
 from server.workflow.state import DebateState, AgentType
@@ -7,6 +6,14 @@ from typing import List, Dict, Any, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph import StateGraph, END
 from langfuse.callback import CallbackHandler
+
+
+try:
+    # ✅ 최신 버전 (LangChain 0.1.x 이상)
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+except ImportError:
+    # ✅ 구버전 호환
+    from langchain.schema import HumanMessage, SystemMessage, AIMessage
 
 
 # 에이전트 내부 상태 타입 정의

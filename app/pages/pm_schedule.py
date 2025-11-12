@@ -29,12 +29,20 @@ with st.form("schedule_form"):
         methodology = st.selectbox("방법론", ["waterfall", "agile"], 
                                    index=0 if default_methodology == "waterfall" else 1)
     
-    st.markdown("### WBS 입력")
-    wbs_json_path = st.text_input(
-        "WBS JSON 경로",
-        value=default_wbs,
-        help="Scope Agent에서 생성된 WBS JSON 파일 경로"
-    )
+    st.markdown("### 입력 파일 경로")
+    col1, col2 = st.columns(2)
+    with col1:
+        req_json_path = st.text_input(
+            "requirements.json 경로",
+            value=str(Path("data/outputs/scope") / project_id / "requirements.json"),
+            help="Scope Agent에서 생성된 요구사항 파일 경로"
+        )
+    with col2:
+        wbs_json_path = st.text_input(
+            "WBS JSON 경로",
+            value=str(Path("data/outputs/scope") / project_id / "wbs_structure.json"),
+            help="Scope Agent에서 생성된 WBS JSON 파일 경로"
+        )
     
     if default_wbs and wbs_json_path == default_wbs:
         st.success("✅ Scope에서 전달된 WBS를 사용합니다.")
@@ -62,6 +70,7 @@ if submitted:
     payload = {
         "project_id": project_id,
         "methodology": methodology,
+        "requirements_json": req_json_path,
         "wbs_json": wbs_json_path,
         "calendar": {"start_date": start_date.isoformat()},
         "sprint_length_weeks": sprint_length,

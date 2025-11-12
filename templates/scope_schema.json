@@ -1,0 +1,17 @@
+{
+    "requirements": [
+      {
+        "req_id": "REQ-001",
+        "title": "기능 이름 (20자 이내)",
+        "type": "functional",
+        "priority": "High",
+        "description": "요구사항 설명 (1~2문장)",
+        "source_span": "문서 위치",
+        "acceptance_criteria": [
+          "검증 기준 1",
+          "검증 기준 2"
+        ]
+      }
+    ]
+  }
+  
