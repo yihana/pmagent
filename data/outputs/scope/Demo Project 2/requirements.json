@@ -1,0 +1,367 @@
+{
+  "project_id": "Demo Project 2",
+  "source": "inline-text",
+  "generated_at": "2025-11-12T10:17:24.560282",
+  "requirements": [
+    {
+      "req_id": "REQ-001",
+      "title": "이메일 회원가입",
+      "type": "functional",
+      "priority": "High",
+      "description": "신규 사용자는 이메일로 회원가입할 수 있어야 한다.",
+      "source_span": "문서: 2.1 사용자 관리 - 회원가입 및 로그인 기능",
+      "acceptance_criteria": [
+        "필수 입력 필드(이메일, 비밀번호) 유효성 검사 및 중복 회원가입 방지",
+        "이메일 형식 검증 및 신규 계정 생성 성공"
+      ]
+    },
+    {
+      "req_id": "REQ-002",
+      "title": "이메일 로그인",
+      "type": "functional",
+      "priority": "High",
+      "description": "등록된 사용자는 이메일과 비밀번호로 로그인할 수 있어야 한다.",
+      "source_span": "문서: 2.1 사용자 관리 - 회원가입 및 로그인 기능",
+      "acceptance_criteria": [
+        "정확한 자격증명으로 로그인 성공",
+        "잘못된 자격증명 시 로그인 실패 및 메시지 표시"
+      ]
+    },
+    {
+      "req_id": "REQ-003",
+      "title": "구글 소셜 로그인",
+      "type": "functional",
+      "priority": "High",
+      "description": "구글 계정으로 로그인할 수 있어야 한다.",
+      "source_span": "문서: 2.1 사용자 관리 - 소셜 로그인 지원 (Google)",
+      "acceptance_criteria": [
+        "Google OAuth 2.0 연동 구성 완료",
+        "구글 계정으로 로그인 성공"
+      ]
+    },
+    {
+      "req_id": "REQ-004",
+      "title": "네이버 소셜 로그인",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "네이버 계정으로 로그인할 수 있어야 한다.",
+      "source_span": "문서: 2.1 사용자 관리 - 소셜 로그인 지원 (Naver)",
+      "acceptance_criteria": [
+        "Naver OAuth 2.0 연동 구성 완료",
+        "네이버 계정으로 로그인 성공"
+      ]
+    },
+    {
+      "req_id": "REQ-005",
+      "title": "카카오 소셜 로그인",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "카카오 계정으로 로그인할 수 있어야 한다.",
+      "source_span": "문서: 2.1 사용자 관리 - 소셜 로그인 지원 (Kakao)",
+      "acceptance_criteria": [
+        "Kakao OAuth 2.0 연동 구성 완료",
+        "카카오 계정으로 로그인 성공"
+      ]
+    },
+    {
+      "req_id": "REQ-006",
+      "title": "프로필 관리",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "사용자는 프로필 정보를 조회 및 수정할 수 있어야 한다.",
+      "source_span": "문서: 2.1 사용자 관리 - 프로필 관리",
+      "acceptance_criteria": [
+        "프로필 조회 가능",
+        "프로필 수정 내용 저장 및 반영"
+      ]
+    },
+    {
+      "req_id": "REQ-007",
+      "title": "상품 검색",
+      "type": "functional",
+      "priority": "High",
+      "description": "상품을 키워드로 검색할 수 있어야 한다.",
+      "source_span": "문서: 2.2 상품 관리 - 상품 검색 및 필터링",
+      "acceptance_criteria": [
+        "키워드 입력 시 관련 상품 목록 재현",
+        "검색 결과의 정확도 및 응답 시간 만족"
+      ]
+    },
+    {
+      "req_id": "REQ-008",
+      "title": "상품 필터링",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "가격대, 카테고리, 브랜드 등으로 필터링 가능해야 한다.",
+      "source_span": "문서: 2.2 상품 관리 - 상품 검색 및 필터링",
+      "acceptance_criteria": [
+        "다중 필터 조합 적용 시 결과 갱신",
+        "필터 조건 변경 시 즉시 반영"
+      ]
+    },
+    {
+      "req_id": "REQ-009",
+      "title": "상품 상세표시",
+      "type": "functional",
+      "priority": "High",
+      "description": "선택된 상품의 상세 정보를 표시해야 한다.",
+      "source_span": "문서: 2.2 상품 관리 - 상품 상세 정보 표시",
+      "acceptance_criteria": [
+        "상품명/설명/가격/재고/리뷰 등의 상세 정보 노출",
+        "잘못된 상품 ID 접근 시 적절한 에러 처리"
+      ]
+    },
+    {
+      "req_id": "REQ-010",
+      "title": "리뷰 및 평점 시스템",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "상품에 리뷰를 작성하고 평점을 남길 수 있어야 한다.",
+      "source_span": "문서: 2.2 상품 관리 - 리뷰 및 평점 시스템",
+      "acceptance_criteria": [
+        "리뷰 작성/수정 가능",
+        "평점 평균 계산 및 상품 상세에 표시"
+      ]
+    },
+    {
+      "req_id": "REQ-011",
+      "title": "장바구니 기능",
+      "type": "functional",
+      "priority": "High",
+      "description": "상품을 장바구니에 담고 수량을 조정할 수 있어야 한다.",
+      "source_span": "문서: 2.3 주문 및 결제 - 장바구니 기능",
+      "acceptance_criteria": [
+        "상품 추가/삭제 가능",
+        "수량 변경 시 합계 및 총합 반영"
+      ]
+    },
+    {
+      "req_id": "REQ-012",
+      "title": "결제 수단 지원",
+      "type": "functional",
+      "priority": "High",
+      "description": "다양한 결제 수단으로 결제할 수 있어야 한다.",
+      "source_span": "문서: 2.3 주문 및 결제 - 다양한 결제 수단 지원",
+      "acceptance_criteria": [
+        "카드/간편결제 등 주요 결제 수단 연동",
+        "결제 실패 시 명확한 실패 원인 표시"
+      ]
+    },
+    {
+      "req_id": "REQ-013",
+      "title": "주문 내역 조회",
+      "type": "functional",
+      "priority": "High",
+      "description": "사용자는 자신의 주문 내역을 조회할 수 있어야 한다.",
+      "source_span": "문서: 2.3 주문 및 결제 - 주문 내역 조회",
+      "acceptance_criteria": [
+        "주문 목록 표기",
+        "주문 상세 조회 가능"
+      ]
+    },
+    {
+      "req_id": "REQ-014",
+      "title": "관리자 대시보드",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "관리자는 시스템 운영 지표를 한 화면에서 확인할 수 있어야 한다.",
+      "source_span": "문서: 2.4 관리자 기능 - 대시보드",
+      "acceptance_criteria": [
+        "주요 KPI 차트 표시",
+        "기간별 필터링으로 조회 가능"
+      ]
+    },
+    {
+      "req_id": "REQ-015",
+      "title": "관리자 상품 관리",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "관리자는 상품 CRUD로 관리할 수 있어야 한다.",
+      "source_span": "문서: 2.4 관리자 기능 - 상품 관리",
+      "acceptance_criteria": [
+        "상품 생성/수정/삭제 가능",
+        "재고 및 가격 반영"
+      ]
+    },
+    {
+      "req_id": "REQ-016",
+      "title": "관리자 주문 관리",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "관리자는 주문 상태를 변경하고 관리할 수 있어야 한다.",
+      "source_span": "문서: 2.4 관리자 기능 - 주문 관리",
+      "acceptance_criteria": [
+        "주문 상태 업데이트 가능",
+        "환불 처리 가능"
+      ]
+    },
+    {
+      "req_id": "REQ-017",
+      "title": "관리자 회원 관리",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "관리자는 회원 정보를 관리하고 제재 조치를 적용할 수 있어야 한다.",
+      "source_span": "문서: 2.4 관리자 기능 - 회원 관리",
+      "acceptance_criteria": [
+        "회원 활성화/비활성화 가능",
+        "역할 관리 및 권한 부여"
+      ]
+    },
+    {
+      "req_id": "REQ-018",
+      "title": "예산 제약",
+      "type": "constraint",
+      "priority": "High",
+      "description": "프로젝트 예산은 상한이 있어야 한다.",
+      "source_span": "문서: 4 제약사항",
+      "acceptance_criteria": [
+        "총 예산이 100,000,000원 이하로 관리",
+        "예산 사용 내역 추적 가능"
+      ]
+    },
+    {
+      "req_id": "REQ-019",
+      "title": "기간 제약",
+      "type": "constraint",
+      "priority": "High",
+      "description": "프로젝트 기간은 6개월로 제한한다.",
+      "source_span": "문서: 4 제약사항",
+      "acceptance_criteria": [
+        "마일스톤 준수 여부 트래킹",
+        "6개월 초과 시 경고"
+      ]
+    },
+    {
+      "req_id": "REQ-020",
+      "title": "기술 스택 제약",
+      "type": "constraint",
+      "priority": "Medium",
+      "description": "React와 Python/FastAPI를 사용해야 한다.",
+      "source_span": "문서: 4 제약사항",
+      "acceptance_criteria": [
+        "프런트엔드: React 기반",
+        "백엔드: FastAPI 기반 REST API"
+      ]
+    },
+    {
+      "req_id": "REQ-021",
+      "title": "클라우드 AWS 사용",
+      "type": "constraint",
+      "priority": "Medium",
+      "description": "클라우드는 AWS를 사용한다.",
+      "source_span": "문서: 4 제약사항",
+      "acceptance_criteria": [
+        "AWS 서비스 구성 및 사용",
+        "S3/RDS 등 필수 서비스 연동"
+      ]
+    },
+    {
+      "req_id": "REQ-022",
+      "title": "가동률 99.9%",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "시스템 가동률은 99.9% 이상이어야 한다.",
+      "source_span": "문서: 3.1 성능",
+      "acceptance_criteria": [
+        "연간 가동 시간 99.9% 이상 달성",
+        "다운타임 발생 시 자동 알림 및 리커버리 실행"
+      ]
+    },
+    {
+      "req_id": "REQ-023",
+      "title": "데이터 백업 1일",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "데이터 백업은 매일 수행되어야 한다.",
+      "source_span": "문서: 3.3 가용성",
+      "acceptance_criteria": [
+        "일 1회 백업 완료",
+        "백업 데이터의 복구 검증 가능"
+      ]
+    },
+    {
+      "req_id": "REQ-024",
+      "title": "HTTPS 필수",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "모든 외부 통신은 HTTPS로 수행되어야 한다.",
+      "source_span": "문서: 3.2 보안",
+      "acceptance_criteria": [
+        "TLS 1.2 이상 사용",
+        "HTTPS 연결 강제 적용"
+      ]
+    },
+    {
+      "req_id": "REQ-025",
+      "title": "개인정보 암호화",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "개인정보는 암호화 저장해야 한다.",
+      "source_span": "문서: 3.2 보안",
+      "acceptance_criteria": [
+        "PII 필드 암호화 저장",
+        "암호화 키 관리 정책 적용"
+      ]
+    },
+    {
+      "req_id": "REQ-026",
+      "title": "SQL Injection 방어",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "SQL Injection으로부터 보호되어야 한다.",
+      "source_span": "문서: 3.2 보안",
+      "acceptance_criteria": [
+        "Prepared statements/ORM 사용",
+        "입력값 검증 강화"
+      ]
+    },
+    {
+      "req_id": "REQ-027",
+      "title": "XSS 방어",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "XSS 공격을 방지해야 한다.",
+      "source_span": "문서: 3.2 보안",
+      "acceptance_criteria": [
+        "출력 인코딩/입력 이스케이프 적용",
+        "필터링 규칙 적용"
+      ]
+    },
+    {
+      "req_id": "REQ-028",
+      "title": "페이지 로딩 2초",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "페이지 로딩 시간을 2초 이내로 설정한다.",
+      "source_span": "문서: 3.1 성능",
+      "acceptance_criteria": [
+        "Lighthouse/실측에서 2초 이하 확인",
+        "초과 시 최적화 조치 수행"
+      ]
+    },
+    {
+      "req_id": "REQ-029",
+      "title": "동시 접속 1000명",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "최대 동시 접속자를 1000명으로 설정한다.",
+      "source_span": "문서: 3.1 성능",
+      "acceptance_criteria": [
+        "부하 테스트에서 1000명 동시 처리 가능",
+        "성능 저하 없이 목표 응답 유지"
+      ]
+    },
+    {
+      "req_id": "REQ-030",
+      "title": "평균 응답 1초",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "평균 응답 시간을 1초 이내로 유지한다.",
+      "source_span": "문서: 3.1 성능",
+      "acceptance_criteria": [
+        "측정 도구로 평균 응답 1초 이하 확인",
+        "DB 인덱스 최적화 등 필요 조치 수행"
+      ]
+    }
+  ]
+}

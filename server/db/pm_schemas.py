@@ -149,3 +149,21 @@ class PMProject(PMProjectBase):
 
     class Config:
         orm_mode = True
+
+
+class ScheduleResponse(BaseModel):
+    status: str
+    message: str
+    project_id: str
+    methodology: str
+    wbs_json_path: Optional[str]
+    plan_csv: Optional[str]
+    gantt_json: Optional[str]
+    timeline: Optional[str]
+    burndown_json: Optional[str]
+    critical_path: List[str]
+    _parsed_critical_path: List[str]
+    timeline_tasks: List[Any]
+    pmp_outputs: Dict[str, Any]
+    data: Dict[str, Any]
+    change_requests: Any

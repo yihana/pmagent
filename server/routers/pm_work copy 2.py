@@ -726,9 +726,34 @@ async def seed_golden(project_id: int = Body(...), data: dict = Body(...)):
 async def schedule_analyze(request: ScheduleRequest):
     """
     Schedule Agent: Requirements → WBS → 일정 계획
+    
+    Examples:
+        # 1. Requirements로 WBS 생성
+        {
+          "project_id": "P001",
+          "requirements": [...],
+          "methodology": "agile",
+          "calendar": {"start_date": "2025-02-01"}
+        }
+        
+        # 2. 기존 WBS 사용
+        {
+          "project_id": "P001",
+          "wbs_json": "/path/to/wbs.json",
+          "methodology": "waterfall"
+        }
+        
+        # 3. Change Request
+        {
+          "project_id": "P001",
+          "wbs_json": "/path/to/wbs.json",
+          "change_requests": [
+            {"op": "update_duration", "task_id": "WBS-1.1", "new_duration": 10}
+          ]
+        }
     """
     try:
-        # 1) Payload 조립
+        # Payload 구성
         payload = {
             "project_id": request.project_id or "default",
             "methodology": request.methodology or "waterfall",
@@ -736,92 +761,126 @@ async def schedule_analyze(request: ScheduleRequest):
             "sprint_length_weeks": request.sprint_length_weeks or 2,
             "estimation_mode": request.estimation_mode or "heuristic",
         }
-
-        # Requirements 또는 wbs_json
+        
+        # Requirements 또는 WBS JSON
         if request.requirements:
             payload["requirements"] = request.requirements
         elif request.wbs_json:
             payload["wbs_json"] = request.wbs_json
         else:
             raise ValueError("Either 'requirements' or 'wbs_json' must be provided")
-
-        # Sprint / Change
+        
+        # Sprint backlogs (Agile)
         if request.sprint_backlogs:
             payload["sprint_backlogs"] = request.sprint_backlogs
+        
+        # Change requests
         if request.change_requests:
             payload["change_requests"] = request.change_requests
-
-        # 2) ScheduleAgent 실행
+        
+        # Schedule Agent 실행
         result = await run_pipeline("schedule", payload)
-
+        
         if result.get("status") != "ok":
             raise ValueError(result.get("message", "Schedule analysis failed"))
-
-        # 3) 안전 파싱
-        project_id = str(request.project_id)
-        methodology = result.get("methodology", request.methodology)
-
-        # critical path
-        critical_path = result.get("critical_path", [])
-        if isinstance(critical_path, dict):
-            critical_path = critical_path.get("critical_path", [])
-        if isinstance(critical_path, str):
+        
+        # Critical path 파싱
+        critical_path_data = []
+        if result.get("_parsed_critical_path"):
+            critical_path_data = result["_parsed_critical_path"]
+        elif result.get("critical_path") and isinstance(result["critical_path"], str):
             try:
-                cp = json.loads(Path(critical_path).read_text(encoding="utf-8"))
-                if isinstance(cp, dict):
-                    critical_path = cp.get("critical_path", [])
-                elif isinstance(cp, list):
-                    critical_path = cp
-            except:
-                critical_path = []
+                cp_path = Path(result["critical_path"])
+                if cp_path.exists():
+                    cp_content = json.loads(cp_path.read_text(encoding="utf-8"))
+                    if isinstance(cp_content, dict) and "critical_path" in cp_content:
+                        critical_path_data = cp_content["critical_path"]
+                    elif isinstance(cp_content, list):
+                        critical_path_data = cp_content
+            except Exception as e:
+                logger.warning(f"Failed to parse critical_path: {e}")
+        
+        # Timeline 파싱
+        timeline_data = []
+        if result.get("timeline") and isinstance(result["timeline"], str):
+            try:
+                timeline_path = Path(result["timeline"])
+                if timeline_path.exists():
+                    timeline_content = json.loads(timeline_path.read_text(encoding="utf-8"))
+                    if isinstance(timeline_content, dict) and "tasks" in timeline_content:
+                        timeline_data = timeline_content["tasks"]
+                    elif isinstance(timeline_content, list):
+                        timeline_data = timeline_content
+            except Exception as e:
+                logger.warning(f"Failed to parse timeline: {e}")
+        
 
-        # timeline
-        timeline_tasks = []
-        timeline_path = result.get("timeline")
-        if timeline_path and isinstance(timeline_path, str):
-            p = Path(timeline_path)
-            if p.exists():
-                try:
-                    content = json.loads(p.read_text(encoding="utf-8"))
-                    if isinstance(content, dict) and "tasks" in content:
-                        timeline_tasks = content["tasks"]
-                    elif isinstance(content, list):
-                        timeline_tasks = content
-                except:
-                    timeline_tasks = []
+        #     status="ok",
+        #     message=result.get("message", "Schedule generated successfully"),
+        #     project_id=str(payload["project_id"]),
+        #     methodology=result.get("methodology", payload["methodology"]),
+            
+        #     # 파일 경로
+        #     wbs_json_path=result.get("wbs_json_path"),
+        #     plan_csv=result.get("plan_csv"),
+        #     gantt_json=result.get("gantt_json"),
+        #     timeline_path=result.get("timeline"),
+        #     burndown_json=result.get("burndown_json"),
+            
+        #     # 파싱된 데이터
+        #     critical_path=critical_path_data,
+        #     timeline=timeline_data,
+            
+        #     # PMP 산출물
+        #     pmp_outputs=result.get("pmp_outputs", {}),
+            
+        #     # 데이터
+        #     data=result.get("data"),
+            
+        #     # Change Request 결과
+        #     change_requests=result.get("change_requests")
+        # )
+        # 1114 최종 반환 구조( pm_work.py 의 ScheduleResponse 가 요구하는 스펙에 맞춤 ) ===
 
-        # 4) 반환
         return ScheduleResponse(
             status="ok",
             message="Schedule generated successfully",
-            project_id=project_id,
+            project_id=str(project_id),
             methodology=methodology,
 
-            wbs_json_path=result.get("wbs_json_path"),
-            plan_csv=result.get("plan_csv"),
-            gantt_json=result.get("gantt_json"),
-            timeline_path=result.get("timeline"),
-            burndown_json=result.get("burndown_json"),
+            wbs_json_path=str(wbs_path) if wbs_path.exists() else None,
+            plan_csv=results["outputs"].get("plan_csv"),
+            gantt_json=results["outputs"].get("gantt_json"),
+            timeline=results["outputs"].get("timeline"),
+            burndown_json=results["outputs"].get("burndown_json"),
 
-            critical_path=critical_path,
-            timeline=timeline_tasks,
+            critical_path=cm_out.get("critical_path", []),
+            _parsed_critical_path=cm_out.get("critical_path", []),
 
-            pmp_outputs=result.get("pmp_outputs"),
-            data=result.get("data"),
-            change_requests=result.get("change_requests"),
+            timeline_tasks=results["outputs"].get("timeline_tasks", []),
+            pmp_outputs=results["outputs"].get("pmp_outputs", {}),
+
+            data={
+                "project_id": project_id,
+                "tasks": len(cm_out.get("tasks", [])),
+                "duration_days": cm_out.get("project_duration_days"),
+            },
+
+            change_requests=cm_out,
         )
 
+    
+
+        
     except ValueError as e:
         logger.error(f"[Schedule Agent] Validation Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-
     except Exception as e:
         logger.exception(f"[Schedule Agent] Error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Schedule analysis failed: {str(e)}"
         )
-
 
 
 @router.get("/schedule/timeline")

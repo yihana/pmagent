@@ -688,16 +688,15 @@ async def _workflow_scope_then_schedule_handler(payload: Dict[str, Any]) -> Dict
 # ===============================
 #  파이프라인 실행 진입점
 # ===============================
-async def run_pipeline(kind: str, payload: Any) -> Dict[str, Any]:
-    """
-    진입부에서 payload 표준화:
-    - 대시보드/라우터에서 Pydantic 모델이 전달되든, dict이든, 항상 dict로 변환
-    - 여기서 변환해두면 하위 핸들러/에이전트에서 .get 사용해도 안전
-    """
-    norm = _to_dict(payload)
-    app = _App(kind)
-    return await app.ainvoke(norm)
-
+# async def run_pipeline(kind: str, payload: Any) -> Dict[str, Any]:
+#     """
+#     진입부에서 payload 표준화:
+#     - 대시보드/라우터에서 Pydantic 모델이 전달되든, dict이든, 항상 dict로 변환
+#     - 여기서 변환해두면 하위 핸들러/에이전트에서 .get 사용해도 안전
+#     """
+#     norm = _to_dict(payload)
+#     app = _App(kind)
+#     return await app.ainvoke(norm)
 class _App:
     def __init__(self, kind: str):
         self.kind = kind
