@@ -228,32 +228,6 @@ async def _run_analyzer_with_timeout(text: str, project_id: int) -> List[Dict[st
 
 
 # ===============================
-#  파이프라인 컨테이너
-# ===============================
-class _App:
-    def __init__(self, kind: str):
-        self.kind = kind
-
-    async def ainvoke(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        if self.kind == "analyze":
-            return await _analyze_handler(payload)
-        elif self.kind == "report":
-            return await _report_handler(payload)
-        elif self.kind == "scope":
-            return await _scope_handler(payload)
-        elif self.kind == "scope_summary":
-            return await _scope_summary_handler(payload)
-        elif self.kind == "schedule":
-            return await _schedule_handler(payload)
-        elif self.kind == "schedule_timeline":
-            return await _schedule_timeline_handler(payload)
-        elif self.kind == "workflow_scope_then_schedule":
-            return await _workflow_scope_then_schedule_handler(payload)
-        else:
-            raise ValueError(f"Unknown pipeline kind: {self.kind}")
-
-
-# ===============================
 #  분석 핸들러
 # ===============================
 async def _analyze_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -685,37 +659,65 @@ async def _workflow_scope_then_schedule_handler(payload: Dict[str, Any]) -> Dict
         }
 
 
+def create_debate_graph(kind: str = "scope"):
+    return _App(kind)
+
+
 # ===============================
-#  파이프라인 실행 진입점
+# 1116 최종: 파이프라인 실행 컨테이너 (완전 통합 버전)
 # ===============================
-async def run_pipeline(kind: str, payload: Any) -> Dict[str, Any]:
-    """
-    진입부에서 payload 표준화:
-    - 대시보드/라우터에서 Pydantic 모델이 전달되든, dict이든, 항상 dict로 변환
-    - 여기서 변환해두면 하위 핸들러/에이전트에서 .get 사용해도 안전
-    """
-    norm = _to_dict(payload)
-    app = _App(kind)
-    return await app.ainvoke(norm)
 
 class _App:
     def __init__(self, kind: str):
         self.kind = kind
 
     async def ainvoke(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        if self.kind == "scope":
+
+        # --------- Analyzer ---------
+        if self.kind == "analyze":
+            return await _analyze_handler(payload)
+
+        # --------- Report ----------
+        elif self.kind == "report":
+            return await _report_handler(payload)
+
+        # --------- Scope ----------
+        elif self.kind == "scope":
             return await _scope_handler(payload)
+
         elif self.kind == "scope_summary":
             return await _scope_summary_handler(payload)
+
+        # --------- Schedule ---------
         elif self.kind == "schedule":
             return await _schedule_handler(payload)
+
         elif self.kind == "schedule_timeline":
             return await _schedule_timeline_handler(payload)
+
+        # --------- Workflow (Scope→Schedule) ---------
         elif self.kind == "workflow_scope_then_schedule":
             return await _workflow_scope_then_schedule_handler(payload)
+
+        # --------- Unknown ----------
         else:
             raise ValueError(f"Unknown pipeline kind: {self.kind}")
 
 
-def create_debate_graph(kind: str = "scope"):
-    return _App(kind)
+# ===============================
+#  1116 run_pipeline (단일 통합 버전)
+# ===============================
+async def run_pipeline(kind: str, payload: Any) -> Dict[str, Any]:
+    """
+    - 어떤 입력이 들어와도 dict로 표준화
+    - 통합된 _App을 호출
+    """
+    try:
+        norm = _to_dict(payload)
+        app = _App(kind)
+        return await app.ainvoke(norm)
+    except Exception as e:
+        logger.error("[PIPELINE] Failed: %s", e)
+        logger.error(traceback.format_exc())
+        raise
+

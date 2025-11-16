@@ -1,168 +1,138 @@
 # Software Requirements Specification
 **Project:** Demo Project
-**Generated:** 2025-11-14T08:43:39.525103
+**Generated:** 2025-11-16T05:25:07.125880
 
 ## 1. Requirements
 
-### REQ-001: 이메일 회원가입
+### REQ-001: 메인배너 관리
 - **Type:** functional
 - **Priority:** High
-- **Description:** 회원은 이메일로 회원가입을 완료할 수 있어야 한다.
-- **Source:** 문서: 2.1 사용자 관리
+- **Description:** 메인 페이지에 배너를 관리할 수 있어야 한다. 배너는 제목, 링크, 시작일/종료일, 노출 여부를 포함한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-002: 소셜 로그인
+### REQ-002: 공지사항 관리
 - **Type:** functional
 - **Priority:** High
-- **Description:** Google, Naver, Kakao 중 하나로 소셜 로그인 지원이 가능해야 한다.
-- **Source:** 문서: 2.1 사용자 관리
+- **Description:** 공지사항을 생성, 수정, 삭제하는 기능을 제공하고 메인에 노출 여부를 제어할 수 있어야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-003: 프로필 관리
+### REQ-003: IT콘텐츠 업로드
 - **Type:** functional
 - **Priority:** High
-- **Description:** 회원은 프로필 정보를 조회하고 수정할 수 있어야 한다.
-- **Source:** 문서: 2.1 사용자 관리
+- **Description:** IT 콘텐츠를 업로드하고 메타데이터와 함께 관리할 수 있어야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-004: 상품 검색
+### REQ-004: QuickLink 관리
 - **Type:** functional
 - **Priority:** High
-- **Description:** 상품을 키워드로 검색할 수 있어야 한다.
-- **Source:** 문서: 2.2 상품 관리
+- **Description:** 전사 포털의 Quick Link를 관리하고, 화면에 반영되도록 해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-005: 상품 필터링
+### REQ-005: SR 상신 결재
 - **Type:** functional
 - **Priority:** High
-- **Description:** 카테고리, 가격대, 평점 등으로 필터링할 수 있어야 한다.
-- **Source:** 문서: 2.2 상품 관리
+- **Description:** IT SR 요청 기능을 상신하고 Knox 그룹 포탈으로 결재를 진행해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-006: 상품 상세 정보 표시
+### REQ-006: SR 현황 공유
+- **Type:** functional
+- **Priority:** Medium
+- **Description:** SR 처리 현황을 담당자 지정 및 이메일로 공유할 수 있어야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
+
+### REQ-007: IT자산 등록 관리
 - **Type:** functional
 - **Priority:** High
-- **Description:** 상품의 주요 정보(이미지, 가격, 재고, 옵션 등)를 상세 페이지에 표시한다.
-- **Source:** 문서: 2.2 상품 관리
+- **Description:** 구매·개발 완료 자산을 등록하고 소유자/위치를 지정해 관리해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-007: 리뷰 및 평점 시스템
+### REQ-008: SR/구매 이력 조회
+- **Type:** functional
+- **Priority:** Medium
+- **Description:** SR 신청 시 구입일, 이력 등을 조회할 수 있는 화면을 제공해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
+
+### REQ-009: 예산 9월 신청
 - **Type:** functional
 - **Priority:** High
-- **Description:** 상품에 대한 리뷰 작성, 수정, 삭제 및 평균 평점 표시를 지원한다.
-- **Source:** 문서: 2.2 상품 관리
+- **Description:** 내년 예산(개발/비용)을 매년 9월에 신청, 등록, 조회할 수 있어야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-008: 장바구니 기능
+### REQ-010: 예산 Excel 등록
+- **Type:** functional
+- **Priority:** Medium
+- **Description:** 예산(개발/비용) Excel 파일을 이용한 대량 등록이 가능해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
+
+### REQ-011: 계약 품의 관리
 - **Type:** functional
 - **Priority:** High
-- **Description:** 상품을 장바구니에 추가하고 수량을 조절할 수 있어야 한다.
-- **Source:** 문서: 2.3 주문 및 결제
+- **Description:** 계약, 실시, 정산, 지급, 수정 품의를 작성하고 조회해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-009: 다양한 결제 수단
+### REQ-012: 지급 관리
+- **Type:** functional
+- **Priority:** Medium
+- **Description:** 지급 데이터 저장 및 지급 횟수 관리 등 지급 관련 품의를 처리해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
+
+### REQ-013:  Knox 결재 연동
+- **Type:** functional
+- **Priority:** Medium
+- **Description:** 계약/품의 상신 시 Knox 그룹 포탈 API를 이용한 결재 연동이 필요하다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
+
+### REQ-014: IPS 프로젝트 관리
 - **Type:** functional
 - **Priority:** High
-- **Description:** 신용카드, 계좌이체 등 최소 3종의 결제 수단을 지원해야 한다.
-- **Source:** 문서: 2.3 주문 및 결제
+- **Description:** 프로젝트 유관자 등록, ISR의 요청사항 관리, 방화벽/서비스 인스턴스/라이선스/계정 정보 기록을 관리해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-010: 주문 내역 조회
+### REQ-015: 유지보수 여부 관리
 - **Type:** functional
-- **Priority:** High
-- **Description:** 사용자가 과거 주문 내역을 조회할 수 있어야 한다.
-- **Source:** 문서: 2.3 주문 및 결제
+- **Priority:** Medium
+- **Description:** 프로젝트 종료 후 유지/보수 여부를 매년 확인하고 관리해야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-011: 관리자 대시보드
+### REQ-016: 데이터 변경 이력
 - **Type:** functional
-- **Priority:** High
-- **Description:** 관리자가 시스템 운영 현황을 확인할 수 있는 대시보드를 제공한다.
-- **Source:** 문서: 2.4 관리자 기능
+- **Priority:** Medium
+- **Description:** 데이터 변경 내역을 확인하고 엑셀로 다운로드할 수 있어야 한다.
+- **Source:** 제안요청서 > 3. 프로젝트 수행 범위
 
-### REQ-012: 관리자 상품 관리
-- **Type:** functional
-- **Priority:** High
-- **Description:** 관리자가 상품을 추가/수정/삭제할 수 있어야 한다.
-- **Source:** 문서: 2.4 관리자 기능
-
-### REQ-013: 관리자 주문 관리
-- **Type:** functional
-- **Priority:** High
-- **Description:** 관리자가 주문 상세 조회 및 상태 변경, 배송 추적 번호 입력을 할 수 있어야 한다.
-- **Source:** 문서: 2.4 관리자 기능
-
-### REQ-014: 관리자 회원 관리
-- **Type:** functional
-- **Priority:** High
-- **Description:** 관리자가 회원 정보를 조회하고 등급/차단 관리 등을 수행할 수 있어야 한다.
-- **Source:** 문서: 2.4 관리자 기능
-
-### REQ-015: 페이지 로딩 속도
+### REQ-017: 시스템 가용성
 - **Type:** non-functional
 - **Priority:** High
-- **Description:** 웹 페이지가 2초 이내에 로드되어야 한다.
-- **Source:** 문서: 3.1 성능
+- **Description:** 시스템은 99.9% 가용성을 목표로 운영되어야 한다.
+- **Source:** 제안요청서 > 4. 시스템 개요
 
-### REQ-016: 동시 접속 1000명 지원
+### REQ-018: 응답 속도
 - **Type:** non-functional
 - **Priority:** High
-- **Description:** 동시 사용자 1000명을 안정적으로 처리할 수 있어야 한다.
-- **Source:** 문서: 3.1 성능
+- **Description:** 웹 서비스와 API 응답은 1초 이내로 처리되어야 한다.
+- **Source:** 제안요청서 > 4. 시스템 개요
 
-### REQ-017: 평균 응답 속도
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 모든 API의 평균 응답 속도는 1초 이내여야 한다.
-- **Source:** 문서: 3.1 성능
-
-### REQ-018: HTTPS 통신 필수
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 모든 트래픽은 TLS 1.2 이상으로 암호화되어 HTTPS로 이루어져야 한다.
-- **Source:** 문서: 3.2 보안
-
-### REQ-019: 개인정보 암호화
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 개인정보는 저장 및 전송 시 암호화되어야 한다.
-- **Source:** 문서: 3.2 보안
-
-### REQ-020: SQL Injection 방어
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 입력값에 대해 SQL Injection을 방지해야 한다.
-- **Source:** 문서: 3.2 보안
-
-### REQ-021: XSS 방어
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 출력 시 XSS 공격에 대한 방어를 수행해야 한다.
-- **Source:** 문서: 3.2 보안
-
-### REQ-022: 시스템 가동률
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 시스템 가동률은 99.9% 이상이어야 한다.
-- **Source:** 문서: 3.3 가용성
-
-### REQ-023: 데이터 백업
-- **Type:** non-functional
-- **Priority:** High
-- **Description:** 데이터 백업은 매일 수행되어야 한다.
-- **Source:** 문서: 3.3 가용성
-
-### REQ-024: 예산 1억원
+### REQ-019: 데이터베이스 제약
 - **Type:** constraint
 - **Priority:** High
-- **Description:** 전체 예산은 1억원 이내로 관리해야 한다.
-- **Source:** 문서: 4. 제약사항
+- **Description:** 데이터베이스는 Oracle DB를 사용해야 한다.
+- **Source:** Table 1
 
-### REQ-025: 기간 6개월
+### REQ-020: OS 배포 제약
 - **Type:** constraint
 - **Priority:** High
-- **Description:** 프로젝트 기간은 6개월 내에 완료해야 한다.
-- **Source:** 문서: 4. 제약사항
+- **Description:** 배포 대상 OS는 Windows 또는 Linux 중 하나로 결정하여 운영한다.
+- **Source:** Table 1
 
-### REQ-026: 기술스택
+### REQ-021: 개발언어 제약
 - **Type:** constraint
 - **Priority:** High
-- **Description:** 프론트엔드는 React, 백엔드는 FastAPI를 사용해야 한다.
-- **Source:** 문서: 4. 제약사항
+- **Description:** 개발 언어는 Java 또는 C# 중 하나를 선택해 프로젝트를 구현한다.
+- **Source:** Table 1
 
-### REQ-027: 클라우드 AWS
+### REQ-022: 웹서버 제약
 - **Type:** constraint
-- **Priority:** High
-- **Description:** 클라우드 인프라는 AWS를 사용해야 한다.
-- **Source:** 문서: 4. 제약사항
+- **Priority:** Medium
+- **Description:** 웹 서버 구성은 Apache/Tomcat 조합 또는 .NET Core 중 하나로 배포한다.
+- **Source:** Table 1
 

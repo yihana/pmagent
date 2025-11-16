@@ -1,6 +1,6 @@
 {
   "project_id": "Demo Project",
-  "generated_at": "2025-11-14T17:43:39.681191",
+  "generated_at": "2025-11-16T14:25:07.214718",
   "outputs": {
     "requirements": "data\\outputs\\scope\\Demo Project\\requirements.json",
     "wbs_draft": "data\\outputs\\scope\\Demo Project\\wbs_structure.json",
@@ -11,9 +11,9 @@
     "project_plan": "data\\outputs\\scope\\Demo Project\\Demo Project_사업수행계획서.xlsx"
   },
   "stats": {
-    "requirements": 27,
-    "functional": 14,
-    "non_functional": 9,
+    "requirements": 22,
+    "functional": 16,
+    "non_functional": 2,
     "constraints": 4
   }
 }
