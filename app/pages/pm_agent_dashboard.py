@@ -43,7 +43,7 @@ with st.sidebar:
 st.markdown("### 🔧 프로젝트 입력")
 col1, col2, col3 = st.columns(3)
 with col1:
-    project_id_str = st.text_input("프로젝트 ID", "1001")
+    project_id_str = st.text_input("프로젝트 ID", "101")
 with col2:
     doc_type = st.selectbox("문서 유형", ["meeting", "report", "issue"])
 with col3:

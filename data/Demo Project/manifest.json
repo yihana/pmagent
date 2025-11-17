@@ -1,0 +1,24 @@
+{
+  "project_id": "Demo Project",
+  "scope": {
+    "project_id": "Demo Project",
+    "generated_at": "2025-11-17T20:29:58.937113",
+    "outputs": {
+      "requirements": "data\\Demo Project\\requirements.json",
+      "wbs_draft": "data\\Demo Project\\wbs_structure.json",
+      "charter": "data\\Demo Project\\Demo Project_프로젝트헌장.docx",
+      "tailoring": "data\\Demo Project\\Demo Project_테일러링.xlsx",
+      "scope_statement": "data\\Demo Project\\Demo Project_범위기술서.xlsx",
+      "rtm": "data\\Demo Project\\Demo Project_요구사항추적표.xlsx",
+      "project_plan": "data\\Demo Project\\Demo Project_사업수행계획서.xlsx"
+    },
+    "stats": {
+      "requirements": 16,
+      "functional": 10,
+      "non_functional": 4,
+      "constraints": 2
+    }
+  },
+  "schedule": {},
+  "generated_at": "2025-11-17T17:34:53.598893"
+}

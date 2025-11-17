@@ -20,7 +20,7 @@ logger = logging.getLogger("schedule.agent")
 # ScheduleAgent
 # =============================================================================
 class ScheduleAgent:
-    def __init__(self, data_dir: str = "data/outputs/schedule"):
+    def __init__(self, data_dir: str = "data"):
         self.llm = get_llm()
         self.DATA_DIR = Path(data_dir)
         self.OUT_DIR = self.DATA_DIR
@@ -36,7 +36,7 @@ class ScheduleAgent:
         logger.info(f"[SCHEDULE] 📅 Schedule Pipeline 시작: {project_id}")
 
         # 디렉토리 준비
-        scope_dir = Path("data/outputs/scope") / project_id
+        scope_dir = Path("data") / project_id
         sched_dir = self.OUT_DIR / project_id
         sched_dir.mkdir(parents=True, exist_ok=True)
 
@@ -183,7 +183,7 @@ class ScheduleAgent:
         results["manifest"] = str(manifest_path)
 
         # === Proposal manifest 갱신 (Scope + Schedule 연결) ===
-        proposal_dir = Path("data/outputs/proposal") / str(project_id)
+        proposal_dir = Path("data") / str(project_id)
         proposal_dir.mkdir(parents=True, exist_ok=True)
         proposal_manifest_path = proposal_dir / "manifest.json"
 

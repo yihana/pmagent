@@ -404,8 +404,8 @@ class ScopeAgent:
             if path:
                 p = Path(path)
                 if not p.exists():
-                    # maybe relative to data/inputs/RFP
-                    alt = Path("data/inputs/RFP") / Path(path).name
+                    # maybe relative to data/inputs
+                    alt = Path("data/inputs") / Path(path).name
                     if alt.exists():
                         p = alt
                 if p.exists():
@@ -426,7 +426,7 @@ class ScopeAgent:
             items["requirements"] = _ensure_req_ids(reqs)
 
         # Write outputs: srs, scope md, rtm csv, wbs json draft
-        out_dir = Path("data/outputs/scope") / str(project_id)
+        out_dir = Path("data") / str(project_id)
         out_dir.mkdir(parents=True, exist_ok=True)
 
         srs_path = out_dir / f"{project_id}_SRS.md"
@@ -488,7 +488,7 @@ class ScopeAgent:
         (scope_dir / "scope_manifest.json").write_text(json.dumps(scope_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
         # === 상위 제안서 매니페스트(최초 생성/갱신) ===
-        proposal_dir = Path("data/outputs/proposal") / str(project_id)
+        proposal_dir = Path("data") / str(project_id)
         proposal_dir.mkdir(parents=True, exist_ok=True)
         proposal_manifest_path = proposal_dir / "manifest.json"
         base = {"project_id": project_id, "scope": {}, "schedule": {}, "generated_at": datetime.now().isoformat()}
@@ -688,6 +688,7 @@ class ScopeAgent:
                 project_name=project_id,
                 requirements=reqs,
                 wbs_data=wbs_data,
+                output_path=charter_path
             )
             logger.info(f"[SCOPE] ✅ 프로젝트 헌장 생성: {charter_path}")
 

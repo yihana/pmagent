@@ -8,7 +8,7 @@ class ProjectPlanGenerator:
         logger = logging.getLogger("scope.agent")
 
         # 기본 더미 출력
-        out_path = Path(output_path or f"data/outputs/scope/{project_name}_사업수행계획서_dummy.xlsx")
+        out_path = Path(output_path or f"data/{project_name}_사업수행계획서_dummy.xlsx")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps({
             "project_name": project_name,

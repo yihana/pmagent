@@ -30,10 +30,23 @@ input_method = st.radio(
 # ============================================
 with st.form("scope_form"):
     st.markdown("### 프로젝트 정보")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
+
     with col1:
-        project_name = st.text_input("프로젝트명", value="Demo Project")
+        project_id = st.text_input(
+            "프로젝트 ID",
+            value=st.session_state.get("project_id", "101")
+        )
+        st.session_state["project_id"] = project_id  # 🔥 저장
+
     with col2:
+        project_name = st.text_input(
+            "프로젝트명",
+            value=st.session_state.get("project_name", "Demo Project")
+        )
+        st.session_state["project_name"] = project_name
+
+    with col3:
         methodology = st.selectbox("방법론", ["waterfall", "agile"], index=0)
     
     st.markdown("### RFP 입력")
@@ -58,8 +71,11 @@ with st.form("scope_form"):
         rfp_path = None
     else:
         rfp_text = None
+        # 1117 현재 선택된 project_id 불러오기
+        prj_id = st.session_state.get("project_id", "default")
+
         # ✅ 업로드된 경로가 있으면 자동으로 채워짐
-        default_path = st.session_state.get("uploaded_path", "data/inputs/RFP/sample_rfp.txt")
+        default_path = st.session_state.get("uploaded_path", f"data/{prj_id}/inputs/sample_rfp.txt")
         rfp_path = st.text_input(
             "서버 파일 경로",
             value=default_path,
@@ -84,7 +100,7 @@ if submitted:
         
         # ✅ 텍스트 직접 전달
         payload = {
-            "project_id": project_name,
+            "project_id": project_id,
             "text": rfp_text,
             "methodology": methodology,
             "options": {"chunk_size": chunk_size, "overlap": overlap}
@@ -96,7 +112,7 @@ if submitted:
         
         # ✅ 파일 경로 전달 (서버에서 읽음)
         payload = {
-            "project_id": project_name,
+            "project_id": project_id,
             "documents": [{"path": rfp_path, "type": "RFP"}],
             "methodology": methodology,
             "options": {"chunk_size": chunk_size, "overlap": overlap}
@@ -211,6 +227,7 @@ if submitted:
         
         # ✅ 세션 저장 (Schedule Agent에서 사용)
         st.session_state["requirements"] = requirements
+        st.session_state["project_id"] = project_id
         st.session_state["project_name"] = project_name
         st.session_state["methodology"] = methodology
         st.session_state["scope_completed"] = True
@@ -268,7 +285,7 @@ with st.sidebar:
             
             with st.spinner("업로드 중..."):
                 res = requests.post(
-                    f"{API_BASE}/upload/rfp", 
+                    f"{API_BASE}/upload/rfp?project_id={st.session_state.get('project_id', 'default')}", 
                     files=files, 
                     timeout=60
                 )

@@ -18,29 +18,42 @@ with st.form("schedule_form"):
     st.markdown("### 프로젝트 정보")
     
     # ✅ Scope에서 전달된 정보 자동 로드
-    default_project = st.session_state.get("project_name", "Demo Project")
+    default_prj_id = st.session_state.get("project_id", "101")
+    default_prj_nm = st.session_state.get("project_name", "Demo Project")
     default_methodology = st.session_state.get("methodology", "waterfall")
     default_wbs = st.session_state.get("wbs_json_path", "")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
+
     with col1:
-        project_id = st.text_input("Project ID", value=default_project)
+        project_id = st.text_input(
+            "프로젝트 ID",
+            value=default_prj_id
+        )
+        st.session_state["project_id"] = project_id  # 🔥 저장
+
     with col2:
-        methodology = st.selectbox("방법론", ["waterfall", "agile"], 
-                                   index=0 if default_methodology == "waterfall" else 1)
+        project_name = st.text_input(
+            "프로젝트명",
+            value=default_prj_nm
+        )
+        st.session_state["project_name"] = project_name
+
+    with col3:
+        methodology = st.selectbox("방법론", ["waterfall", "agile"], index=0)
     
     st.markdown("### 입력 파일 경로")
     col1, col2 = st.columns(2)
     with col1:
         req_json_path = st.text_input(
             "requirements.json 경로",
-            value=str(Path("data/outputs/scope") / project_id / "requirements.json"),
+            value=str(Path("data") / project_id / "requirements.json"),
             help="Scope Agent에서 생성된 요구사항 파일 경로"
         )
     with col2:
         wbs_json_path = st.text_input(
             "WBS JSON 경로",
-            value=str(Path("data/outputs/scope") / project_id / "wbs_structure.json"),
+            value=str(Path("data") / project_id / "wbs_structure.json"),
             help="Scope Agent에서 생성된 WBS JSON 파일 경로"
         )
     
@@ -201,14 +214,18 @@ if submitted:
                 if sprint_count:
                     st.metric("Sprint 수", sprint_count)
         
-        # Timeline 미리보기
-        timeline_path = data.get("data", {}).get("timeline_path")
+
+        # Timeline 미리보기 1117
+        timeline_path = data.get("timeline_path")
+
         if timeline_path:
             with st.expander("📈 Timeline 미리보기"):
                 try:
-                    if Path(timeline_path).exists():
-                        with open(timeline_path, "r", encoding="utf-8") as f:
+                    p = Path(timeline_path)
+                    if p.exists():
+                        with p.open("r", encoding="utf-8") as f:
                             tl = json.load(f)
+
                         tasks = tl.get("tasks", [])
                         if tasks:
                             st.table([
@@ -222,6 +239,7 @@ if submitted:
                             ])
                 except Exception as e:
                     st.warning(f"Timeline 로드 실패: {e}")
+
         
         # 전체 응답
         with st.expander("🔍 전체 응답 (JSON)"):

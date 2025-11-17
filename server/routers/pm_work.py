@@ -21,8 +21,15 @@ router = APIRouter(prefix="/api/v1/pm", tags=["pm"])
 logger = logging.getLogger(__name__)
 
 # 파일 업로드 디렉토리 설정
-UPLOAD_DIR = Path("data/inputs/RFP")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+def get_project_upload_dir(project_id: str) -> Path:
+    """
+    모든 입력(RFP) 파일은 data/<project_id>/inputs 로 통합 저장
+    """
+    base = Path("data") / project_id / "inputs"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
 try:
     from server.db.database import SessionLocal
     from server.db import pm_models
@@ -31,6 +38,7 @@ except Exception:
     _DB_AVAILABLE = False
     SessionLocal = None
     pm_models = None
+
 
 # ✅ DOCX 확장자 추가
 ALLOWED_EXTS = {".pdf", ".txt", ".md", ".docx"}
@@ -60,7 +68,7 @@ def _unique_path(base_dir: Path, filename: str) -> Path:
 # ==== [추가] 출력 폴더 유틸 ====
 def _scope_out_dir(project_id: str | int) -> Path:
     """
-    Scope 산출물 기본 폴더: <repo-root>/data/outputs/scope/<project_id>
+    Scope 산출물 기본 폴더: <repo-root>/data/<project_id>
     (프로젝트마다 고정 경로로 저장되도록 통일)
     """
     here = Path(__file__).resolve()
@@ -69,7 +77,7 @@ def _scope_out_dir(project_id: str | int) -> Path:
         if (p / "data").exists():
             root = p
             break
-    out = root / "data" / "outputs" / "scope" / str(project_id)
+    out = root / "data" / str(project_id)
     out.mkdir(parents=True, exist_ok=True)
     return out
 
@@ -409,10 +417,17 @@ async def graph_report(project_id: int = Query(..., description="프로젝트 ID
 
 # server/routers/pm_work.py
 @router.post("/upload/rfp")
-async def upload_rfp(file: UploadFile = File(...)):
+async def upload_rfp(
+    project_id: str = Query(..., description="프로젝트 ID"),
+    file: UploadFile = File(...)
+):
     """RFP 파일 업로드 (PDF/TXT/MD/DOCX)"""
     MAX_FILE_SIZE = 200 * 1024 * 1024
-    
+
+    # 1117 🔥 요청마다 project_id 기반으로 디렉토리 생성
+    UPLOAD_DIR = get_project_upload_dir(project_id)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
     try:
         if not file.filename:
             raise ValueError("파일명이 없습니다")
@@ -431,8 +446,7 @@ async def upload_rfp(file: UploadFile = File(...)):
         safe = _safe_filename(orig)
         if Path(safe).suffix.lower() != ext:
             safe = f"{Path(safe).stem}{ext}"
-        file_path = _unique_path(UPLOAD_DIR, safe)
-        
+        file_path = _unique_path(UPLOAD_DIR, safe)        
         print(f"🔵 [UPLOAD] 저장경로: {file_path}")
 
         content_length = file.size
@@ -500,10 +514,11 @@ async def upload_rfp(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="빈 파일")
         
         print(f"✅ [UPLOAD] 검증완료: {size} bytes")
-        relative_path = f"data/inputs/RFP/{file_path.name}"
+        relative_path = f"data/{project_id}/inputs/{file_path.name}"
 
         response = {
             "status": "ok",
+            "project_id": project_id,
             "filename": file_path.name,
             "path": relative_path,
             "abs_path": str(file_path.resolve()),
@@ -561,7 +576,7 @@ async def scope_analyze(request: ScopeRequest):
             merged_text, metas = read_texts(
                 paths,
                 header=True,
-                search_roots=[Path("data/inputs/RFP"), Path("data")]
+                search_roots=[Path(f"data/{project_id}/inputs"), Path("data")]
             )
             if not merged_text.strip():
                 print(f"🔴 [SCOPE] 텍스트 없음")
@@ -754,7 +769,7 @@ async def schedule_analyze(request: ScheduleRequest):
         # 2) ScheduleAgent 실행
         result = await run_pipeline("schedule", payload)
 
-        if result.get("status") != "ok":
+        if result.get("status") not in (None, "ok"):
             raise ValueError(result.get("message", "Schedule analysis failed"))
 
         # 3) 안전 파싱
