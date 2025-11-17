@@ -226,3 +226,60 @@ class ScheduleAgent:
         except Exception as e:
             logger.warning(f"[SCHEDULE] raw extract 실패: {e}")
             return str(resp)
+        
+    def create_schedule(self, requirements: List[Dict]) -> Dict:
+        logger.info("[SCHEDULE] 일정 계획 시작: %d개 요구사항", len(requirements))
+
+        num_requirements = len(requirements)
+
+        days_per_req = 5      # (설계1 + 개발3 + 테스트1):contentReference[oaicite:26]{index=26}
+        parallel_factor = 0.7 # 30% 병렬 처리 고려:contentReference[oaicite:27]{index=27}
+
+        dev_days = int(num_requirements * days_per_req * parallel_factor)
+
+        phases = self._create_phases(dev_days)
+        total_duration = sum(p["duration"] for p in phases)
+        milestones = self._create_milestones(phases)
+
+        logger.info(
+            "[SCHEDULE] 완료: 총 %d일 (%.1f개월)",
+            total_duration,
+            total_duration / 30,
+        )
+
+        return {
+            "total_duration": total_duration,
+            "phases": phases,
+            "critical_path": ["설계", "개발", "테스트"],
+            "milestones": milestones,
+            "start_date": datetime.now().strftime("%Y-%m-%d"),
+            "end_date": (datetime.now() + timedelta(days=total_duration)).strftime(
+                "%Y-%m-%d"
+            ),
+            "note": "상세 WBS 및 Critical Path 분석 예정",
+        }
+
+    def _create_phases(self, dev_days: int) -> List[Dict]:
+        # 아주 단순한 3단계 분배 예시
+        design = max(5, int(dev_days * 0.2))
+        implementation = max(10, int(dev_days * 0.6))
+        testing = max(5, dev_days - design - implementation)
+
+        return [
+            {"name": "설계", "duration": design},
+            {"name": "개발", "duration": implementation},
+            {"name": "테스트", "duration": testing},
+        ]
+
+    def _create_milestones(self, phases: List[Dict]) -> List[Dict]:
+        milestones = []
+        day_acc = 0
+        for p in phases:
+            day_acc += p["duration"]
+            milestones.append(
+                {
+                    "name": f"{p['name']} 완료",
+                    "day_offset": day_acc,
+                }
+            )
+        return milestones        

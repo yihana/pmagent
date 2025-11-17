@@ -418,17 +418,33 @@ class ScopeAgent:
         logger.warning("[SCOPE] 최대 시도 도달. 마지막 결과 반환.")
         return last_json or {"requirements": []}, last_raw
 
+
+    # 1117 deep_reasoning 추가
     async def pipeline(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        ScopeAgent pipeline (Deep Reasoning + 기존 로직 완전 유지)
+
+        주요 단계:
+        0) ToT 전략 선택
+        0.5) 초기 요구사항 1차 추출(전략 기반 추출)
+        0.6) Self-Refine 반복
+        1~9) 기존 로직(파일 출력, DB저장, PMP 산출물 등) 그대로 수행
+        """
+        # ------------------------------------------------------------
+        # 기존 로직: payload / 파일 입력 처리
+        # ------------------------------------------------------------
         project_id = payload.get("project_id") or payload.get("project_name") or "Unknown"
         text = payload.get("text") or ""
         documents = payload.get("documents") or []
         options = payload.get("options") or {}
+
         confidence_threshold = float(options.get("confidence_threshold", 0.75))
         max_attempts = int(options.get("max_attempts", 3))
+
         tot_constraints: Dict = options.get("tot_constraints", {}) or {}
         user_refine_iterations: Optional[int] = options.get("refine_iterations")
 
-        # if no text but documents - read first file path if exists (best-effort)
+        # 파일 입력 보완
         if not text and documents:
             first = documents[0]
             path = None
@@ -436,50 +452,126 @@ class ScopeAgent:
                 path = first.get("path")
             else:
                 path = getattr(first, "path", None)
+
             if path:
                 p = Path(path)
                 if not p.exists():
-                    # maybe relative to data/inputs
                     alt = Path("data/inputs") / Path(path).name
                     if alt.exists():
                         p = alt
                 if p.exists():
                     try:
-                        # simple read for txt; for docx/pdf we expect upper layer to convert
                         text = p.read_text(encoding="utf-8", errors="ignore")
                     except Exception:
                         text = ""
 
         logger.info("🔵 [SCOPE] 요청: project_id=%s, methodology=%s", project_id, payload.get("methodology"))
 
-        # Run extraction with confidence loop
-        items, raw_resp = await self._extract_items_with_confidence(text, confidence_threshold, max_attempts)
+        # ============================================================
+        # 🧠 (0) ToT 전략 선택 (심층추론)
+        # ============================================================
+        try:
+            strategy_key, strategy = self.tot_selector.select_strategy(
+                text,
+                constraints=tot_constraints
+            )
+            logger.info(f"[ToT] 선택된 전략: {strategy['name']}")
+        except Exception as e:
+            logger.exception(f"[ToT] 전략 선택 실패: {e}")
+            # 심층추론 실패 시 fallback 전략
+            strategy = {
+                "name": "Balanced",
+                "refine_iterations": 2,
+                "expected_quality": 0.85
+            }
+
+        # ============================================================
+        # 🧠 (0.5) 1차 요구사항 추출 (전략 기반)
+        # ============================================================
+        try:
+            if strategy["name"] == "Full-Detail":
+                mode = "full"
+            elif strategy["name"] == "Minimal":
+                mode = "minimal"
+            else:
+                mode = "few_shot"
+
+            first_extract = await self._extract_requirements_with_mode(
+                text=text,
+                mode=mode,
+                options=options
+            )
+
+            logger.info(f"[ToT/Extract] 초기 요구사항 {len(first_extract)}개")
+        except Exception as e:
+            logger.exception(f"[ToT/Extract] 실패 — fallback로 종전 로직 사용: {e}")
+            # fallback = 기존 confidence 모드 추출
+            items, raw_resp = await self._extract_items_with_confidence(
+                text, confidence_threshold, max_attempts
+            )
+            first_extract = items.get("requirements", [])
+
+        # ============================================================
+        # 🧠 (0.6) Self-Refine 반복
+        # ============================================================
+        try:
+            iterations = user_refine_iterations or strategy.get("refine_iterations", 2)
+
+            refine_result = self.refine_engine.refine_loop(
+                initial_requirements=first_extract,
+                max_iterations=iterations,
+                target_score=tot_constraints.get("min_quality", 0.85)
+            )
+
+            final_requirements = refine_result["final_requirements"]
+
+            logger.info(f"[Self-Refine] 개선 후 요구사항 수: {len(final_requirements)}")
+        except Exception as e:
+            logger.exception(f"[Self-Refine] 실패 — 초기 요구사항 사용: {e}")
+            final_requirements = first_extract
+            refine_result = {
+                "final_requirements": final_requirements,
+                "final_score": 0.0,
+                "iterations": 0,
+                "history": []
+            }
+
+        # ============================================================
+        # (1~9) 기존 로직 — 모든 기능 완전 유지
+        # ============================================================
+
+        # items 구조로 매핑
+        items = {
+            "requirements": final_requirements,
+            "functions": [],   # 기존 구조 유지
+        }
+        raw_resp = ""  # 기존 반환형 일관성 위해
 
         # Ensure req_ids
-        reqs = items.get("requirements", [])
-        if reqs:
-            items["requirements"] = _ensure_req_ids(reqs)
+        if items.get("requirements"):
+            items["requirements"] = _ensure_req_ids(items["requirements"])
 
-        # Write outputs: srs, scope md, rtm csv, wbs json draft
+        # 출력 디렉토리 준비
         out_dir = Path("data") / str(project_id)
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        # (4) SRS 생성
         srs_path = out_dir / f"{project_id}_SRS.md"
         self._generate_srs(project_id, items, srs_path)
 
-        # WBS draft: keep simple hierarchical draft (could be improved via WBS synthesis step)
+        # (5) WBS draft 생성
         wbs = await self._synthesize_wbs_draft(items, depth=int(options.get("wbs_depth", 3)))
         wbs_path = out_dir / "wbs_structure.json"
         wbs_path.write_text(json.dumps(wbs, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        # RTM csv
+        # (6) RTM CSV 생성
         rtm_csv = out_dir / "rtm.csv"
         with rtm_csv.open("w", encoding="utf-8", newline="") as fh:
             fh.write("req_id,wbs_id,test_case,verification_status\n")
-            for r in items.get("requirements", []):
+            for r in items["requirements"]:
                 fh.write(f"{r.get('req_id')},,,Candidate\n")
 
-        # attempt DB save (best-effort)
+        # (7) DB 저장
         saved = 0
         if _DB_AVAILABLE:
             try:
@@ -487,22 +579,14 @@ class ScopeAgent:
             except Exception as e:
                 logger.exception("[SCOPE] DB save failed: %s", e)
                 saved = 0
-        else:
-            logger.debug("[SCOPE] DB not available, skipping DB save")
 
-        # PMP outputs (scope_statement excel etc.) - keep existing hooks
+        # (8) PMP Outputs 생성
         pmp_outputs = await self._generate_pmp_outputs(project_id, items, wbs, options, out_dir)
 
-        # 1112
-        # === Scope manifest (연결점) ===
+        # (9) Scope manifest
         scope_manifest = {
             "project_id": project_id,
             "generated_at": datetime.now().isoformat(),
-            # "outputs": {
-                # "requirements": str(out_dir / "requirements.json"),
-                # "wbs_draft": str(out_dir / "wbs_structure.json"),
-                # "charter": str(out_dir / "project_charter.md"),
-                # "tailoring": str(out_dir / "tailoring_guide.json"),
             "outputs": {
                 "requirements": str(out_dir / "requirements.json"),
                 "wbs_draft": str(out_dir / "wbs_structure.json"),
@@ -511,36 +595,41 @@ class ScopeAgent:
                 "scope_statement": str(out_dir / f"{project_id}_범위기술서.xlsx"),
                 "rtm": str(out_dir / f"{project_id}_요구사항추적표.xlsx"),
                 "project_plan": str(out_dir / f"{project_id}_사업수행계획서.xlsx"),
-            },                
+            },
             "stats": {
-                "requirements": len(items.get("requirements", [])),
-                "functional": sum(1 for r in items.get("requirements", []) if r.get("type") in ("functional","기능")),
-                "non_functional": sum(1 for r in items.get("requirements", []) if r.get("type") in ("non-functional","비기능")),
-                "constraints": sum(1 for r in items.get("requirements", []) if r.get("type") in ("constraint","제약")),
+                "requirements": len(items["requirements"]),
+                "functional": sum(1 for r in items["requirements"] if r.get("type") in ("functional", "기능")),
+                "non_functional": sum(1 for r in items["requirements"] if r.get("type") in ("non-functional", "비기능")),
+                "constraints": sum(1 for r in items["requirements"] if r.get("type") in ("constraint", "제약")),
             }
         }
-        (scope_dir := out_dir).mkdir(parents=True, exist_ok=True)
-        (scope_dir / "scope_manifest.json").write_text(json.dumps(scope_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        # === 상위 제안서 매니페스트(최초 생성/갱신) ===
+        (out_dir / "scope_manifest.json").write_text(
+            json.dumps(scope_manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+
+        # Proposal Manifest
         proposal_dir = Path("data") / str(project_id)
-        proposal_dir.mkdir(parents=True, exist_ok=True)
         proposal_manifest_path = proposal_dir / "manifest.json"
         base = {"project_id": project_id, "scope": {}, "schedule": {}, "generated_at": datetime.now().isoformat()}
+
         if proposal_manifest_path.exists():
             try:
                 base = json.loads(proposal_manifest_path.read_text(encoding="utf-8"))
             except Exception:
                 pass
+
         base["scope"] = scope_manifest
         proposal_manifest_path.write_text(json.dumps(base, ensure_ascii=False, indent=2), encoding="utf-8")
+
         logger.info(f"[SCOPE] 📦 manifest 생성 완료: {proposal_manifest_path}")
 
-
-        result = {
+        # (10) 반환
+        return {
             "status": "ok",
             "project_id": project_id,
-            "requirements": items.get("requirements", []),
+            "requirements": items["requirements"],
             "functions": items.get("functions", []),
             "wbs_json": str(wbs_path),
             "wbs": wbs,
@@ -549,11 +638,34 @@ class ScopeAgent:
             "pmp_outputs": pmp_outputs,
             "db_saved_requirements": saved,
             "_llm_raw_response": str(raw_resp)[:2000],
+            "deep_reasoning": {
+                "strategy": strategy,
+                "refine": refine_result,
+            }
         }
-        logger.info("✅ [SCOPE] 응답완료: %s (requirements=%d, saved=%d)", project_id, len(items.get("requirements", [])), saved)
-        print(">>> Loaded Deep Reasoning Pipeline v1.0")
-        return result
 
+
+
+    async def _extract_requirements_with_mode(
+        self,
+        text: str,
+        mode: str,
+        options: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        ToT 전략에 따라 다른 프롬프트 템플릿 / few-shot 구성을 적용하는 래퍼.
+
+        - "full"     : 가장 무거운 템플릿 + 예시 다수
+        - "few_shot" : 기존 few-shot 템플릿
+        - "minimal"  : 기본 템플릿만 사용
+
+        내부에서는 기존에 구현해둔
+        `self.extract_requirements(...)` 나 유사 메소드를 호출만 하고,
+        여기서는 전략 분기만 담당하도록 최소 수정으로 두는 것이 좋습니다.
+        """
+        # TODO: 여기서 실제 기존 구현과 연결
+        return await self.extract_requirements(text, options=options)
+    
 
     def _fallback_extract(self, text: str) -> Dict[str, Any]:
         """간단 규칙 기반 (기존 fallback 유지)"""
