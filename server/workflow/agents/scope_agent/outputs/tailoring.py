@@ -8,13 +8,14 @@ class TailoringGenerator:
     """테일러링 Excel 생성기 (방법론 맞춤)"""
     
     @staticmethod
-    def generate(methodology: str, output_path: Path) -> str:
+    def generate(methodology: str, output_path: Path, requirements=None) -> str:
         """
         테일러링 문서 생성
         
         Args:
             methodology: 프로젝트 방법론 (waterfall/agile)
             output_path: 저장할 파일 경로
+            requirements: 선택적. 향후 테일러링에 요구사항을 반영하기 위함.
             
         Returns:
             str: 생성된 파일의 절대 경로

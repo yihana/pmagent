@@ -1,6 +1,6 @@
 {
   "project_id": "Demo Project",
-  "generated_at": "2025-11-17T20:29:58.937113",
+  "generated_at": "2025-11-17T22:59:45.520170",
   "outputs": {
     "requirements": "data\\Demo Project\\requirements.json",
     "wbs_draft": "data\\Demo Project\\wbs_structure.json",
@@ -12,8 +12,8 @@
   },
   "stats": {
     "requirements": 16,
-    "functional": 10,
+    "functional": 11,
     "non_functional": 4,
-    "constraints": 2
+    "constraints": 1
   }
 }

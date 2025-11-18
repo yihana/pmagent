@@ -38,7 +38,8 @@ class CostAgent:
             "note": "상세 산정 로직은 향후 WBS 기반으로 교체 예정",
         }
 
-        logger.info("[COST] 완료: 총 %,d원", total_cost)
+        # 1118 천 단위 콤마 포함해서 문자열로 만들어서 찍기
+        logger.info("[COST] 완료: 총 %s원", f"{total_cost:,}")
         return result
 
     def _estimate_complexity(self, requirements: List[Dict]) -> float:

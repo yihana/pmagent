@@ -55,7 +55,11 @@ class MinimalPMGraph:
         logger.info("-" * 70)
 
         cost_result = self.cost_agent.estimate_cost(requirements)
-        logger.info("✅ 비용 추정 완료: %,d원", cost_result["total_cost"])
+        logger.info(
+            "✅ 비용 추정 완료: %s원",
+            f"{cost_result['total_cost']:,}",
+        )
+
 
         # Phase 3: Schedule
         logger.info("\n[Phase 3/3] Schedule Agent 실행")
