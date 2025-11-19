@@ -1,6 +1,6 @@
 {
   "project_id": "1010",
-  "generated_at": "2025-11-18T11:08:26.007793",
+  "generated_at": "2025-11-18T12:50:19.562324",
   "outputs": {
     "requirements": "data\\1010\\requirements.json",
     "wbs_draft": "data\\1010\\wbs_structure.json",
@@ -11,9 +11,9 @@
     "project_plan": "data\\1010\\1010_사업수행계획서.xlsx"
   },
   "stats": {
-    "requirements": 23,
-    "functional": 19,
+    "requirements": 14,
+    "functional": 8,
     "non_functional": 1,
-    "constraints": 3
+    "constraints": 5
   }
 }
