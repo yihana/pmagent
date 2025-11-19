@@ -1,0 +1,113 @@
+{
+  "nodes": [
+    {
+      "id": "WBS-1",
+      "name": "Project",
+      "level": 1,
+      "children": [
+        {
+          "id": "WBS-1.1",
+          "name": "Phase 1",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.1.1",
+              "name": "이메일 가입",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.2",
+              "name": "로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.3",
+              "name": "로그아웃",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.4",
+              "name": "이메일 인증",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.5",
+              "name": "비밀번호 변경",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.6",
+              "name": "비밀번호 재설정",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.2",
+          "name": "Phase 2",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.2.1",
+              "name": "계정 잠금 정책",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.2",
+              "name": "세션 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.3",
+              "name": "역할 생성",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.4",
+              "name": "역할 할당",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.5",
+              "name": "권한 부여 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.6",
+              "name": "자원 접근 제어 체크",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.3",
+          "name": "Phase 3",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.3.1",
+              "name": "API 응답 속도",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.2",
+              "name": "보안 전송",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.3",
+              "name": "비밀번호 해시",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.4",
+              "name": "데이터베이스 제약",
+              "level": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "depth": 3
+}

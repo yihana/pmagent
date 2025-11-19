@@ -1,0 +1,31 @@
+{
+  "project_id": "Demo Project",
+  "generated_at": "2025-11-16T14:27:31.174651",
+  "inputs": {
+    "requirements": "data\\outputs\\scope\\Demo Project\\requirements.json",
+    "wbs_structure": "data\\outputs\\scope\\Demo Project\\wbs_structure.json"
+  },
+  "outputs": {
+    "rtm_excel": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_요구사항추적표.xlsx",
+    "wbs_excel": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_WBS.xlsx",
+    "change_mgmt_excel": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_변경관리.xlsx",
+    "critical_path_png": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_변경관리_critical_path.png",
+    "critical_path_html": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_변경관리_critical_path.html",
+    "critical_path": [
+      "WBS-1",
+      "WBS-1.2",
+      "WBS-1.2.6"
+    ],
+    "project_duration_days": 18
+  },
+  "cpm": {
+    "duration_days": 18,
+    "critical_path": [
+      "WBS-1",
+      "WBS-1.2",
+      "WBS-1.2.6"
+    ],
+    "html": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_변경관리_critical_path.html",
+    "png": "D:\\workspace\\pm-agent\\data\\Demo Project\\Demo Project_변경관리_critical_path.png"
+  }
+}
