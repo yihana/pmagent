@@ -1,0 +1,72 @@
+[
+  {
+    "rfp_id": 0,
+    "naive_req_count": 7,
+    "agent_req_count": 12,
+    "naive_time": 0.02168416976928711,
+    "agent_time": 36.1894268989563,
+    "improvement": 5,
+    "time_overhead": 36.16774272918701,
+    "success": true
+  },
+  {
+    "rfp_id": 1,
+    "naive_req_count": 20,
+    "agent_req_count": 36,
+    "naive_time": 0.01622915267944336,
+    "agent_time": 87.14361453056335,
+    "improvement": 16,
+    "time_overhead": 87.12738537788391,
+    "success": true
+  },
+  {
+    "rfp_id": 2,
+    "naive_req_count": 3,
+    "agent_req_count": 14,
+    "naive_time": 0.0071489810943603516,
+    "agent_time": 42.08235192298889,
+    "improvement": 11,
+    "time_overhead": 42.07520294189453,
+    "success": true
+  },
+  {
+    "rfp_id": 3,
+    "naive_req_count": 3,
+    "agent_req_count": 15,
+    "naive_time": 0.0066127777099609375,
+    "agent_time": 33.866201877593994,
+    "improvement": 12,
+    "time_overhead": 33.85958909988403,
+    "success": true
+  },
+  {
+    "rfp_id": 4,
+    "naive_req_count": 3,
+    "agent_req_count": 30,
+    "naive_time": 0.003689289093017578,
+    "agent_time": 42.865631341934204,
+    "improvement": 27,
+    "time_overhead": 42.86194205284119,
+    "success": true
+  },
+  {
+    "rfp_id": 5,
+    "naive_req_count": 4,
+    "agent_req_count": 14,
+    "naive_time": 0.042292118072509766,
+    "agent_time": 31.502732515335083,
+    "improvement": 10,
+    "time_overhead": 31.460440397262573,
+    "success": true
+  },
+  {
+    "rfp_id": 6,
+    "naive_req_count": 4,
+    "agent_req_count": 21,
+    "naive_time": 0.007357120513916016,
+    "agent_time": 36.88534688949585,
+    "improvement": 17,
+    "time_overhead": 36.877989768981934,
+    "success": true
+  }
+]

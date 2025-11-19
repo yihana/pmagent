@@ -1,0 +1,44 @@
+[
+  {
+    "project_id": "E4-0",
+    "req_count": 24,
+    "total_cost": 16200000,
+    "duration": 84
+  },
+  {
+    "project_id": "E4-1",
+    "req_count": 18,
+    "total_cost": 15899999,
+    "duration": 62
+  },
+  {
+    "project_id": "E4-2",
+    "req_count": 23,
+    "total_cost": 17999999,
+    "duration": 80
+  },
+  {
+    "project_id": "E4-3",
+    "req_count": 22,
+    "total_cost": 19800000,
+    "duration": 77
+  },
+  {
+    "project_id": "E4-4",
+    "req_count": 24,
+    "total_cost": 17700000,
+    "duration": 84
+  },
+  {
+    "project_id": "E4-5",
+    "req_count": 16,
+    "total_cost": 14700000,
+    "duration": 56
+  },
+  {
+    "project_id": "E4-6",
+    "req_count": 20,
+    "total_cost": 16800000,
+    "duration": 70
+  }
+]

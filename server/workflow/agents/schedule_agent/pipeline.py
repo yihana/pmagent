@@ -282,4 +282,26 @@ class ScheduleAgent:
                     "day_offset": day_acc,
                 }
             )
-        return milestones        
+        return milestones   
+
+    def create_schedule_from_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        MetaPlanner / API용 래퍼.
+        requirements_json, wbs_json 경로를 받아서
+        내부적으로 create_schedule()을 호출.
+        """
+        import json
+        from pathlib import Path
+
+        reqs: list[dict] = []
+        req_path = payload.get("requirements_json")
+        if req_path and Path(req_path).exists():
+            data = json.loads(Path(req_path).read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                reqs = data.get("requirements", [])
+            elif isinstance(data, list):
+                reqs = data
+
+        # 지금 있는 구현 그대로 재사용
+        return self.create_schedule(reqs)
+
