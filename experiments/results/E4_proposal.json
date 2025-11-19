@@ -1,44 +1,44 @@
 [
   {
     "project_id": "E4-0",
-    "req_count": 18,
-    "total_cost": 14699999,
-    "duration": 62
+    "req_count": 12,
+    "total_cost": 9600000,
+    "duration": 42
   },
   {
     "project_id": "E4-1",
-    "req_count": 20,
-    "total_cost": 15900000,
-    "duration": 70
+    "req_count": 24,
+    "total_cost": 20100000,
+    "duration": 84
   },
   {
     "project_id": "E4-2",
     "req_count": 19,
-    "total_cost": 17400000,
+    "total_cost": 14699999,
     "duration": 66
   },
   {
     "project_id": "E4-3",
     "req_count": 20,
-    "total_cost": 15600000,
+    "total_cost": 16800000,
     "duration": 70
   },
   {
     "project_id": "E4-4",
-    "req_count": 21,
-    "total_cost": 15299999,
-    "duration": 73
+    "req_count": 14,
+    "total_cost": 9600000,
+    "duration": 49
   },
   {
     "project_id": "E4-5",
-    "req_count": 16,
-    "total_cost": 14400000,
-    "duration": 56
+    "req_count": 23,
+    "total_cost": 20099999,
+    "duration": 80
   },
   {
     "project_id": "E4-6",
-    "req_count": 21,
-    "total_cost": 17400000,
-    "duration": 73
+    "req_count": 26,
+    "total_cost": 20999999,
+    "duration": 91
   }
 ]

@@ -419,9 +419,9 @@ def create_summary_report(e1, e2, e3, e4, results_dir: Path):
 
     # E2
     if e2:
-        durations_base = [r["baseline_duration"] for r in e2]
-        durations_got = [r["got_best"] for r in e2]
-        candidate_counts = [r["num_candidates"] for r in e2]
+        durations_base = [r.get("baseline_duration", 0) for r in e2]
+        durations_got = [r.get("got_best", 0) for r in e2]
+        candidate_counts = [r.get("num_candidates", 0) for r in e2]
 
         report.append("📊 E2: Schedule — Heuristic vs GoT")
         report.append("-" * 60)
