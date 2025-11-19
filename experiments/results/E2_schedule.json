@@ -1,0 +1,44 @@
+[
+  {
+    "rfp_id": 0,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  },
+  {
+    "rfp_id": 1,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  },
+  {
+    "rfp_id": 2,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  },
+  {
+    "rfp_id": 3,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  },
+  {
+    "rfp_id": 4,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  },
+  {
+    "rfp_id": 5,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  },
+  {
+    "rfp_id": 6,
+    "baseline_duration": 20,
+    "got_best": 20,
+    "got_candidates": 3
+  }
+]

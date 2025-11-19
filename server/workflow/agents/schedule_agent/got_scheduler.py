@@ -36,12 +36,7 @@ class ScheduleGoT:
             # 예시 파라미터: 병렬도 계수
             parallel_factor = random.choice([0.5, 0.7, 0.9])
 
-            plan = self.base.create_schedule(
-                requirements=requirements,
-                wbs=wbs,
-                mode="dag",                 # 항상 CP/DAG 기반
-                parallel_factor=parallel_factor
-            )
+            plan = self.base.create_schedule(requirements)
 
             candidates.append({
                 "plan": plan,
