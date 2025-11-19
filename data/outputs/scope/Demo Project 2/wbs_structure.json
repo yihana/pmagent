@@ -1,0 +1,183 @@
+{
+  "nodes": [
+    {
+      "id": "WBS-1",
+      "name": "Project",
+      "level": 1,
+      "children": [
+        {
+          "id": "WBS-1.1",
+          "name": "Phase 1",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.1.1",
+              "name": "이메일 회원가입",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.2",
+              "name": "이메일 로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.3",
+              "name": "구글 소셜 로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.4",
+              "name": "네이버 소셜 로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.5",
+              "name": "카카오 소셜 로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.6",
+              "name": "프로필 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.7",
+              "name": "상품 검색",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.8",
+              "name": "상품 필터링",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.9",
+              "name": "상품 상세표시",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.10",
+              "name": "리뷰 및 평점 시스템",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.2",
+          "name": "Phase 2",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.2.1",
+              "name": "장바구니 기능",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.2",
+              "name": "결제 수단 지원",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.3",
+              "name": "주문 내역 조회",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.4",
+              "name": "관리자 대시보드",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.5",
+              "name": "관리자 상품 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.6",
+              "name": "관리자 주문 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.7",
+              "name": "관리자 회원 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.8",
+              "name": "예산 제약",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.9",
+              "name": "기간 제약",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.10",
+              "name": "기술 스택 제약",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.3",
+          "name": "Phase 3",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.3.1",
+              "name": "클라우드 AWS 사용",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.2",
+              "name": "가동률 99.9%",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.3",
+              "name": "데이터 백업 1일",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.4",
+              "name": "HTTPS 필수",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.5",
+              "name": "개인정보 암호화",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.6",
+              "name": "SQL Injection 방어",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.7",
+              "name": "XSS 방어",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.8",
+              "name": "페이지 로딩 2초",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.9",
+              "name": "동시 접속 1000명",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.10",
+              "name": "평균 응답 1초",
+              "level": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "depth": 3
+}

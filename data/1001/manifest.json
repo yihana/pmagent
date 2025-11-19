@@ -1,0 +1,54 @@
+{
+  "project_id": "101",
+  "scope": {
+    "project_id": "101",
+    "generated_at": "2025-11-17T16:15:17.034983",
+    "outputs": {
+      "requirements": "data\\101\\requirements.json",
+      "wbs_draft": "data\\101\\wbs_structure.json",
+      "charter": "data\\101\\101_프로젝트헌장.docx",
+      "tailoring": "data\\101\\101_테일러링.xlsx",
+      "scope_statement": "data\\101\\101_범위기술서.xlsx",
+      "rtm": "data\\101\\101_요구사항추적표.xlsx",
+      "project_plan": "data\\101\\101_사업수행계획서.xlsx"
+    },
+    "stats": {
+      "requirements": 28,
+      "functional": 15,
+      "non_functional": 9,
+      "constraints": 4
+    }
+  },
+  "schedule": {
+    "project_id": "101",
+    "generated_at": "2025-11-17T16:24:21.633997",
+    "inputs": {
+      "requirements": "data\\101\\requirements.json",
+      "wbs_structure": "data\\101\\wbs_structure.json"
+    },
+    "outputs": {
+      "rtm_excel": "D:\\workspace\\pm-agent\\data\\101\\101_요구사항추적표.xlsx",
+      "wbs_excel": "D:\\workspace\\pm-agent\\data\\101\\101_WBS.xlsx",
+      "change_mgmt_excel": "D:\\workspace\\pm-agent\\data\\101\\101_변경관리.xlsx",
+      "critical_path_png": "D:\\workspace\\pm-agent\\data\\101\\101_변경관리_critical_path.png",
+      "critical_path_html": "D:\\workspace\\pm-agent\\data\\101\\101_변경관리_critical_path.html",
+      "critical_path": [
+        "WBS-1",
+        "WBS-1.2",
+        "WBS-1.2.6"
+      ],
+      "project_duration_days": 19
+    },
+    "cpm": {
+      "duration_days": 19,
+      "critical_path": [
+        "WBS-1",
+        "WBS-1.2",
+        "WBS-1.2.6"
+      ],
+      "html": "D:\\workspace\\pm-agent\\data\\101\\101_변경관리_critical_path.html",
+      "png": "D:\\workspace\\pm-agent\\data\\101\\101_변경관리_critical_path.png"
+    }
+  },
+  "generated_at": "2025-11-17T16:15:17.078450"
+}

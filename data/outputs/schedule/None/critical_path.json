@@ -1,0 +1,15 @@
+{
+  "project_id": "None",
+  "critical_path": [
+    {
+      "id": "WBS-1.1",
+      "name": "Phase 1",
+      "duration": 2.0,
+      "ES": 0,
+      "EF": 2.0,
+      "LS": 0.0,
+      "LF": 2.0,
+      "Float": 0.0
+    }
+  ]
+}

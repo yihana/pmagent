@@ -1,0 +1,173 @@
+{
+  "nodes": [
+    {
+      "id": "WBS-1",
+      "name": "Project",
+      "level": 1,
+      "children": [
+        {
+          "id": "WBS-1.1",
+          "name": "Phase 1",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.1.1",
+              "name": "회원가입",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.2",
+              "name": "로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.3",
+              "name": "소셜 로그인",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.4",
+              "name": "프로필 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.5",
+              "name": "상품 검색",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.6",
+              "name": "상품 필터링",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.7",
+              "name": "상품 상세정보",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.8",
+              "name": "리뷰 및 평점",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.9",
+              "name": "장바구니",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.10",
+              "name": "결제 수단",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.2",
+          "name": "Phase 2",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.2.1",
+              "name": "주문 내역 조회",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.2",
+              "name": "대시보드",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.3",
+              "name": "상품 관리(관리자)",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.4",
+              "name": "주문 관리(관리자)",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.5",
+              "name": "회원 관리(관리자)",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.6",
+              "name": "페이지 로딩 시간",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.7",
+              "name": "동시 접속자",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.8",
+              "name": "응답 시간",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.9",
+              "name": "HTTPS 필수",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.10",
+              "name": "개인정보 암호화",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.3",
+          "name": "Phase 3",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.3.1",
+              "name": "SQL Injection 방어",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.2",
+              "name": "XSS 방어",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.3",
+              "name": "시스템 가동률",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.4",
+              "name": "데이터 백업",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.5",
+              "name": "예산",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.6",
+              "name": "기간",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.7",
+              "name": "기술스택",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.8",
+              "name": "클라우드",
+              "level": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "depth": 3
+}

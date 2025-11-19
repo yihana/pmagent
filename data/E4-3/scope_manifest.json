@@ -1,0 +1,19 @@
+{
+  "project_id": "E4-3",
+  "generated_at": "2025-11-19T09:51:16.365853",
+  "outputs": {
+    "requirements": "data\\E4-3\\requirements.json",
+    "wbs_draft": "data\\E4-3\\wbs_structure.json",
+    "charter": "data\\E4-3\\E4-3_프로젝트헌장.docx",
+    "tailoring": "data\\E4-3\\E4-3_테일러링.xlsx",
+    "scope_statement": "data\\E4-3\\E4-3_범위기술서.xlsx",
+    "rtm": "data\\E4-3\\E4-3_요구사항추적표.xlsx",
+    "project_plan": "data\\E4-3\\E4-3_사업수행계획서.xlsx"
+  },
+  "stats": {
+    "requirements": 22,
+    "functional": 16,
+    "non_functional": 3,
+    "constraints": 3
+  }
+}
