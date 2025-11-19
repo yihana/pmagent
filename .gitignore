@@ -8,3 +8,4 @@ node_modules/
 *.zip
 *.pdf
 /server/routers/health.py
+data/
