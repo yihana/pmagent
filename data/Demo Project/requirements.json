@@ -1,0 +1,199 @@
+{
+  "project_id": "Demo Project",
+  "source": "메리츠종금증권_웹_접근성_개선_프로젝트_제안요청서_1.docx",
+  "generated_at": "2025-11-17T11:29:58.996921",
+  "requirements": [
+    {
+      "req_id": "REQ-001",
+      "title": "웹 표준화 적용",
+      "type": "functional",
+      "priority": "High",
+      "description": "HTML5/CSS3 기반으로 사이트 구조를 재구성하고 IE11+, Chrome, Firefox, Safari에서 크로스브라우징이 가능하도록 구현한다.",
+      "source_span": "Ⅱ. 과업 범위 > (1) 웹 표준화 적용",
+      "acceptance_criteria": [
+        "대상 페이지가 HTML5/CSS3로 구성되어 있어야 한다",
+        "IE11+, Chrome, Firefox, Safari 최신 버전에서 렌더링 및 핵심 기능이 정상 작동해야 한다"
+      ]
+    },
+    {
+      "req_id": "REQ-002",
+      "title": "비표준 스크립트 제거",
+      "type": "functional",
+      "priority": "High",
+      "description": "비표준 스크립트 및 비호환 콘텐츠를 제거하여 크로스브라우징 호환성을 확보한다.",
+      "source_span": "Ⅱ. 과업 범위 > (2) 웹 접근성 개선",
+      "acceptance_criteria": [
+        "비표준 스크립트/콘텐츠 0건 유지",
+        "크로스브라우징 테스트에서 비표준 콘텐츠의 동작이 문제없음"
+      ]
+    },
+    {
+      "req_id": "REQ-003",
+      "title": "KWCAG 2.0 준수",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "한국형 웹 콘텐츠 접근성 지침(KWCAG 2.0)을 준수하고 4대 원칙을 충족한다.",
+      "source_span": "Ⅱ. 과업 범위 > (2) 웹 접근성 개선",
+      "acceptance_criteria": [
+        "KWCAG 2.0 진단에서 합격 판정",
+        "인식의 용이성, 운용의 용이성, 이해의 용이성, 견고성 각 항목의 점검이 충족"
+      ]
+    },
+    {
+      "req_id": "REQ-004",
+      "title": "대체 텍스트 제공",
+      "type": "functional",
+      "priority": "High",
+      "description": "이미지, 차트 등 비텍스트 콘텐츠에 대체 텍스트를 반드시 제공한다.",
+      "source_span": "Ⅱ. 과업 범위 > (2) 웹 접근성 개선",
+      "acceptance_criteria": [
+        "모든 비텍스트 콘텐츠에 대체 텍스트가 존재",
+        "대체 텍스트 누락 비율 0%"
+      ]
+    },
+    {
+      "req_id": "REQ-005",
+      "title": "키보드 접근 보장",
+      "type": "functional",
+      "priority": "High",
+      "description": "모든 기능은 키보드로 접근 가능하고 조작 가능해야 한다.",
+      "source_span": "Ⅱ. 과업 범위 > (2) 웹 접근성 개선",
+      "acceptance_criteria": [
+        "키보드로 모든 기능에 접근 가능",
+        "스크린리더 사용 시 주요 기능 동작에 문제 없음"
+      ]
+    },
+    {
+      "req_id": "REQ-006",
+      "title": "일관된 내비게이션",
+      "type": "functional",
+      "priority": "High",
+      "description": "메뉴 구조와 위치를 전체 사이트에서 일관되게 유지한다.",
+      "source_span": "Ⅱ. 과업 범위 > (2) 웹 접근성 개선",
+      "acceptance_criteria": [
+        "동일 위치의 메뉴가 모든 페이지에서 동일한 기능 제공",
+        "네비게이션 일관성 테스트 PASS"
+      ]
+    },
+    {
+      "req_id": "REQ-007",
+      "title": "보조기기 호환성 테스트",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "스크린리더 및 보조기기와의 호환성을 테스트하고 호환성을 확보한다.",
+      "source_span": "Ⅱ. 과업 범위 > (2) 웹 접근성 개선",
+      "acceptance_criteria": [
+        "스클린리더/보조기기에서의 주요 기능 작동 확인",
+        "호환성 테스트 PASS"
+      ]
+    },
+    {
+      "req_id": "REQ-008",
+      "title": "K-WAH 도입 인증 준비",
+      "type": "functional",
+      "priority": "High",
+      "description": "K-WAH 4.0 점검 도구를 활용한 자체 진단 및 수정과 인증심사 대응, 서류 제출, 현장 검증 준비를 수행한다.",
+      "source_span": "Ⅱ. 과업 범위 > (3) 품질인증 마크 취득",
+      "acceptance_criteria": [
+        "자체 진단 완료 및 수정 반영",
+        "인증기관 심사 대응 및 서류 제출 준비 완료"
+      ]
+    },
+    {
+      "req_id": "REQ-009",
+      "title": "텍스트 대비 테스트",
+      "type": "non-functional",
+      "priority": "High",
+      "description": "텍스트 대비 및 색맹 대비 테스트를 수행하여 충분한 시인성을 보장한다.",
+      "source_span": "Ⅱ. 과업 범위 > (4) 디자인 및 콘텐츠 개선",
+      "acceptance_criteria": [
+        "일반 텍스트 대비 4.5:1 이상",
+        "필요 시 색상 대비 보강 및 테스트 보고서 제출"
+      ]
+    },
+    {
+      "req_id": "REQ-010",
+      "title": "가독성/레이아웃 개선",
+      "type": "non-functional",
+      "priority": "Medium",
+      "description": "폰트 크기 조정 및 레이아웃 재구성으로 가독성을 향상시킨다.",
+      "source_span": "Ⅱ. 과업 범위 > (4) 디자인 및 콘텐츠 개선",
+      "acceptance_criteria": [
+        "가독성 테스트에서 합격 수준 도달",
+        "UI가 가독성 가이드라인에 부합되도록 수정"
+      ]
+    },
+    {
+      "req_id": "REQ-011",
+      "title": "적용 대상 범위 명시",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "대표 홈페이지, 온라인 트레이딩 시스템(HTS/MTS), 고객지원센터 사이트, 이벤트/프로모션 페이지를 적용 대상으로 명시한다.",
+      "source_span": "Ⅱ. 과업 범위 > (1) 적용 대상",
+      "acceptance_criteria": [
+        "적용 대상 목록이 산출물에 명시",
+        "대상 페이지 전부에 적용 항목 반영 여부 확인"
+      ]
+    },
+    {
+      "req_id": "REQ-012",
+      "title": "현황 분석 보고서 2주 이내 제출",
+      "type": "functional",
+      "priority": "High",
+      "description": "착수 후 2주 이내 현황 분석 보고서를 제출한다.",
+      "source_span": "Ⅲ. 과업 일정 > 착수 ~ 2주",
+      "acceptance_criteria": [
+        "현황 분석 보고서 제출 기한 준수",
+        "진단 결과 및 접근성 현황 요약 포함"
+      ]
+    },
+    {
+      "req_id": "REQ-013",
+      "title": "개선 가이드 문서 제출",
+      "type": "functional",
+      "priority": "Medium",
+      "description": "중간보고 시 개선 가이드 문서를 제출하여 HTML/CSS 수정방안을 제시한다.",
+      "source_span": "Ⅱ. 산출물 목록 > 2) 개선 가이드 문서",
+      "acceptance_criteria": [
+        "개선 가이드 문서 제출",
+        "HTML/CSS 수정방안 포함"
+      ]
+    },
+    {
+      "req_id": "REQ-014",
+      "title": "품질인증 심사 자료 제출",
+      "type": "functional",
+      "priority": "High",
+      "description": "인증 심사에 필요한 자료를 제출하고 현장검증에 대응한다.",
+      "source_span": "Ⅱ. 산출물 목록 > 4) 품질인증 심사 대응 자료",
+      "acceptance_criteria": [
+        "인증 심사 제출 자료 완비",
+        "현장검증 대응 계획 및 참여"
+      ]
+    },
+    {
+      "req_id": "REQ-015",
+      "title": "1년 무상 유지보수",
+      "type": "constraint",
+      "priority": "High",
+      "description": "과업 완료 후 1년간 무상 유지보수를 수행한다.",
+      "source_span": "Ⅵ. 일반 조건 및 유의사항 > 6) 과업 완료 후 1년간 무상 유지보수",
+      "acceptance_criteria": [
+        "1년간 무상 유지보수 계약 존재",
+        "범위 내 버그 수정 및 안정성 보장"
+      ]
+    },
+    {
+      "req_id": "REQ-016",
+      "title": "보안서약서 제출",
+      "type": "constraint",
+      "priority": "High",
+      "description": "낙찰자는 계약 시 보안서약서를 제출한다.",
+      "source_span": "Ⅵ. 일반 조건 및 유의사항 > 5) 낙찰자는 계약 시 보안서약서 제출 필수",
+      "acceptance_criteria": [
+        "보안서약서 제출 여부 확인",
+        "비밀유지 및 보안 요건 동의"
+      ]
+    }
+  ]
+}
