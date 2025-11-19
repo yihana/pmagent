@@ -1,0 +1,19 @@
+{
+  "project_id": "E1-baseline-3",
+  "generated_at": "2025-11-19T09:40:07.323335",
+  "outputs": {
+    "requirements": "data\\E1-baseline-3\\requirements.json",
+    "wbs_draft": "data\\E1-baseline-3\\wbs_structure.json",
+    "charter": "data\\E1-baseline-3\\E1-baseline-3_프로젝트헌장.docx",
+    "tailoring": "data\\E1-baseline-3\\E1-baseline-3_테일러링.xlsx",
+    "scope_statement": "data\\E1-baseline-3\\E1-baseline-3_범위기술서.xlsx",
+    "rtm": "data\\E1-baseline-3\\E1-baseline-3_요구사항추적표.xlsx",
+    "project_plan": "data\\E1-baseline-3\\E1-baseline-3_사업수행계획서.xlsx"
+  },
+  "stats": {
+    "requirements": 22,
+    "functional": 5,
+    "non_functional": 11,
+    "constraints": 6
+  }
+}

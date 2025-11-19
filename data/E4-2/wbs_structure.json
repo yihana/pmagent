@@ -1,0 +1,118 @@
+{
+  "nodes": [
+    {
+      "id": "WBS-1",
+      "name": "Project",
+      "level": 1,
+      "children": [
+        {
+          "id": "WBS-1.1",
+          "name": "Phase 1",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.1.1",
+              "name": "로봇 데이터 수집",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.2",
+              "name": "데이터 저장 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.3",
+              "name": "보안 체계 적용",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.4",
+              "name": "시뮬레이션 장비 구축",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.5",
+              "name": "실증환경 공간 구축",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.6",
+              "name": "물리엔진 시뮬레이터",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.2",
+          "name": "Phase 2",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.2.1",
+              "name": "물리 데이터 구성",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.2",
+              "name": "개발·실증 지원 프로세스",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.3",
+              "name": "표준/가이드 제정 지원",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.4",
+              "name": "혁신 네트워크 운영",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.5",
+              "name": "장비 운영 지원",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.6",
+              "name": "기술 자문",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.3",
+          "name": "Phase 3",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.3.1",
+              "name": "안전 컨설팅",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.2",
+              "name": "융복합 교육",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.3",
+              "name": "성과지표 관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.4",
+              "name": "예산 제약",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.5",
+              "name": "기간 제약",
+              "level": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "depth": 3
+}

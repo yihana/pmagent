@@ -1,0 +1,12 @@
+{
+  "project_name": "E1-deep-0",
+  "requirements": 15,
+  "wbs_nodes": 1,
+  "options": {
+    "tot_constraints": {
+      "max_time": 120,
+      "min_quality": 0.85
+    },
+    "refine_iterations": 2
+  }
+}

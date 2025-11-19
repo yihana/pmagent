@@ -13,6 +13,7 @@ import logging
 from server.db.database import get_db
 from server.db import pm_crud, pm_models
 from server.workflow.pm_graph import run_pipeline
+from server.workflow.meta_planner import MetaPlanner
 from server.utils.doc_reader import read_texts, ingest_text, DocReadError
 import shutil, re, time
 
@@ -303,9 +304,9 @@ class ScheduleResponse(BaseModel):
     change_requests: Optional[Dict[str, Any]] = None
 
 
-# ===============================
-# Workflow 모델
-# ===============================
+# ============================================================
+# 신규: ReWOO / Meta-Planner Proposal API
+# ============================================================
 
 class WorkflowRequest(BaseModel):
     """
@@ -327,6 +328,64 @@ class WorkflowResponse(BaseModel):
     scope: ScopeResponse
     schedule: ScheduleResponse
     summary: Optional[Dict[str, Any]] = None
+
+
+# ============================================================
+# 신규: ReWOO / Meta-Planner Proposal API
+# ============================================================
+
+meta_planner = MetaPlanner()
+
+class RewooRequest(BaseModel):
+    project_id: str
+    project_name: str
+    methodology: str = "waterfall"
+    rfp_text: str
+    scope_options: dict = {}
+    schedule_options: dict = {}
+
+@router.post("/proposal/rewoo")
+async def proposal_rewoo(request: RewooRequest):
+    """
+    ReWOO Proposal Workflow (Meta-Planner 기반)
+    Scope → Cost → Schedule → Risk → Integrator (선택)
+    """
+    try:
+        payload = {
+            "project_id": request.project_id,
+            "project_name": request.project_name,
+            "methodology": request.methodology,
+            "rfp_text": request.rfp_text,
+            "scope_options": request.scope_options,
+            "schedule_options": request.schedule_options,
+        }
+
+        # Meta-Planner 실행
+        result = await meta_planner.generate(payload)
+
+        # Streamlit이 기대하는 summary 필드 생성
+        summary = {
+            "requirements_count": len(result["scope"].get("requirements", [])),
+            "total_cost": result["cost"].get("total_cost"),
+            "schedule_duration": result["schedule"].get("total_duration"),
+        }
+
+        return {
+            "status": "ok",
+            "summary": summary,
+            "scope": result["scope"],
+            "cost": result["cost"],
+            "schedule": result["schedule"],
+            "risk": result.get("risk"),
+            "integrator": result.get("integrator"),
+        }
+
+    except Exception as e:
+        logger.exception(f"[ReWOO Proposal API] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 # ===============================
 # 기존: 그래프 분석 / 리포트

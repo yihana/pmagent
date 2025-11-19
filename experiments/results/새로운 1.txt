@@ -1,0 +1,243 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+새로운 크로스 플랫폼 PowerShell 사용 https://aka.ms/pscore6
+
+PS C:\Users\08484> d:
+PS D:\> cd .\workspace\
+PS D:\workspace> cd .\pm-agent\
+PS D:\workspace\pm-agent> D:\\workspace\\pm-agent\\.venv\\Scripts\\Activate.ps1
+(.venv) PS D:\workspace\pm-agent> python -m experiments.run_experiments
+[INFO] Loaded 7 RFP samples from experiments\rfp_samples
+
+=== E1: Scope Quality ===
+[PROMPT-RAG] 임베딩 키 없음 → RAG 비활성
+
+[E1] RFP #0 ---------------------------
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\workspace\pm-agent\experiments\run_experiments.py", line 243, in <module>
+    e1 = experiment_E1_scope(rfps)
+  File "D:\workspace\pm-agent\experiments\run_experiments.py", line 49, in experiment_E1_scope
+    scope._extract_items_with_confidence(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        rfp_text,
+        ^^^^^^^^^
+        confidence_threshold=0.7,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+        max_attempts=2,
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: ScopeAgent._extract_items_with_confidence() got an unexpected keyword argument 'confidence_threshold'
+(.venv) PS D:\workspace\pm-agent>
+(.venv) PS D:\workspace\pm-agent> pip install matplotlib
+Requirement already satisfied: matplotlib in d:\workspace\pm-agent\.venv\lib\site-packages (3.10.1)
+Requirement already satisfied: contourpy>=1.0.1 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (1.3.3)
+Requirement already satisfied: cycler>=0.10 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (0.12.1)
+Requirement already satisfied: fonttools>=4.22.0 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (4.60.1)
+Requirement already satisfied: kiwisolver>=1.3.1 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (1.4.9)
+Requirement already satisfied: numpy>=1.23 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (2.2.6)
+Requirement already satisfied: packaging>=20.0 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (24.2)
+Requirement already satisfied: pillow>=8 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (11.3.0)
+Requirement already satisfied: pyparsing>=2.3.1 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (3.2.5)
+Requirement already satisfied: python-dateutil>=2.7 in d:\workspace\pm-agent\.venv\lib\site-packages (from matplotlib) (2.9.0.post0)
+Requirement already satisfied: six>=1.5 in d:\workspace\pm-agent\.venv\lib\site-packages (from python-dateutil>=2.7->matplotlib) (1.17.0)
+(.venv) PS D:\workspace\pm-agent> python -m experiments.run_experiments
+
+============================================================
+🚀 PM Agent v0.9 정량 실험 시작
+============================================================
+
+[INFO] Loaded 7 RFP samples from experiments\rfp_samples
+
+=== E1: Scope Quality ===
+[PROMPT-RAG] 임베딩 키 없음 → RAG 비활성
+
+[E1] RFP #0 ---------------------------
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\workspace\pm-agent\experiments\run_experiments.py", line 256, in <module>
+    e1 = experiment_E1_scope(rfps)
+  File "D:\workspace\pm-agent\experiments\run_experiments.py", line 53, in experiment_E1_scope
+    scope._extract_items_with_confidence(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        rfp_text,
+        ^^^^^^^^^
+        confidence_threshold=0.7,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+        max_attempts=2,
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: ScopeAgent._extract_items_with_confidence() got an unexpected keyword argument 'confidence_threshold'
+(.venv) PS D:\workspace\pm-agent> python scripts/run_experiments.py
+D:\workspace\pm-agent\.venv\Scripts\python.exe: can't open file 'D:\\workspace\\pm-agent\\scripts\\run_experiments.py': [Errno 2] No such file or directory
+(.venv) PS D:\workspace\pm-agent>
+(.venv) PS D:\workspace\pm-agent> python -m experiments.run_experiments
+
+============================================================
+🚀 PM Agent v0.9 정량 실험 시작
+============================================================
+
+[INFO] Loaded 7 RFP samples from experiments\rfp_samples
+
+=== E1: Scope Quality ===
+[PROMPT-RAG] 임베딩 키 없음 → RAG 비활성
+
+[E1] RFP #0 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=16, time=39.92s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=15, time=36.29s
+
+[E1] RFP #1 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=44, time=78.38s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=24, time=41.08s
+
+[E1] RFP #2 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=12, time=46.25s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=15, time=29.35s
+
+[E1] RFP #3 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=22, time=46.03s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=16, time=50.18s
+
+[E1] RFP #4 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=17, time=49.26s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=24, time=45.08s
+
+[E1] RFP #5 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=18, time=36.49s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=18, time=40.52s
+
+[E1] RFP #6 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Baseline: req=22, time=43.37s
+>>> Loaded Deep Reasoning Pipeline v1.0
+  Deep:     req=20, time=50.95s
+
+[SUMMARY] E1 Scope Quality/Efficiency
+  성공 케이스: 7/7
+  Baseline req avg: 21.57
+  Deep req avg:     18.86
+  개선율:           -12.6%
+  Baseline time avg:48.53s
+  Deep time avg:    41.92s
+✅ E1 시각화 저장: experiments\results\E1_visualization.png
+
+=== E2: Schedule GoT ===
+[WARN] E2: E2-0 requirements/wbs json not found, skip.
+[WARN] E2: E2-1 requirements/wbs json not found, skip.
+[WARN] E2: E2-2 requirements/wbs json not found, skip.
+[WARN] E2: E2-3 requirements/wbs json not found, skip.
+[WARN] E2: E2-4 requirements/wbs json not found, skip.
+[WARN] E2: E2-5 requirements/wbs json not found, skip.
+[WARN] E2: E2-6 requirements/wbs json not found, skip.
+⚠️  E2: 시각화할 데이터 없음
+
+=== E3: Efficiency (Scope Time) ===
+
+=== E4: End-to-End Proposal ===
+[PROMPT-RAG] 임베딩 키 없음 → RAG 비활성
+
+[E4] Project E4-0 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=12, cost=10200000, duration=42
+
+[E4] Project E4-1 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=36, cost=25499999, duration=125
+
+[E4] Project E4-2 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=17, cost=13200000, duration=59
+
+[E4] Project E4-3 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=22, cost=18599999, duration=77
+
+[E4] Project E4-4 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=25, cost=17700000, duration=87
+
+[E4] Project E4-5 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=17, cost=14100000, duration=59
+
+[E4] Project E4-6 ---------------------------
+>>> Loaded Deep Reasoning Pipeline v1.0
+  req=32, cost=27000000, duration=112
+
+============================================================
+PM Agent v0.9 실험 결과 요약 리포트
+============================================================
+
+📊 E1: Scope 품질/효율성
+------------------------------------------------------------
+  성공 케이스:               7/7개
+  Baseline 평균 요구사항 수: 21.6개
+  Deep 평균 요구사항 수:     18.9개
+  개선율:                    -12.6% 증가
+
+  Baseline 평균 처리 시간:   48.5초
+  Deep 평균 처리 시간:       41.9초
+  시간 오버헤드:             -13.6%
+
+📊 E4: End-to-End Proposal 생성
+------------------------------------------------------------
+  총 프로젝트 수:            7개
+  평균 요구사항 수:          23.0개
+  평균 추정 비용:            18,042,857원
+  평균 예상 기간:            80.1일
+
+============================================================
+🎯 발표 핵심 메시지 검증
+============================================================
+✅ 1. Agent 문제 이해: Baseline 대비 Deep 방식이 -13% 더 많은 요구사항 추출
+✅ 3. 정량적 검증: 총 7개 RFP 샘플로 반복 실험 완료
+
+
+✅ 요약 리포트 저장: experiments\results\SUMMARY_REPORT.txt
+
+============================================================
+✅ 모든 실험 완료!
+📁 결과 저장 위치: experiments\results
+📊 생성된 파일:
+  - JSON 데이터: E1~E4.json
+  - 시각화: E1_visualization.png, E2_visualization.png
+  - 요약 리포트: SUMMARY_REPORT.txt
+============================================================
+(.venv) PS D:\workspace\pm-agent> streamlit run app/main.py --server.port 8501
+>>
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://10.211.126.241:8501
+
+DEBUG - API_BASE_URL: http://127.0.0.1:8001/api/v1
+DEBUG - API_BASE_URL: http://127.0.0.1:8001/api/v1
+DEBUG - API_BASE_URL: http://127.0.0.1:8001/api/v1
+2025-11-19 11:04:05.658 Uncaught app execution
+Traceback (most recent call last):
+  File "D:\workspace\pm-agent\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py", line 121, in exec_func_with_error_handling
+    result = func()
+  File "D:\workspace\pm-agent\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 591, in code_to_exec
+    exec(code, module.__dict__)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\pm-agent\app\pages\3_risk.py", line 8, in <module>
+    from server.workflow.agents.risk_agent.risk_agent import RiskAgent
+ModuleNotFoundError: No module named 'server'

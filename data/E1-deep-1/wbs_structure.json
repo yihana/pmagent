@@ -1,0 +1,153 @@
+{
+  "nodes": [
+    {
+      "id": "WBS-1",
+      "name": "Project",
+      "level": 1,
+      "children": [
+        {
+          "id": "WBS-1.1",
+          "name": "Phase 1",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.1.1",
+              "name": "24시간대응",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.2",
+              "name": "점검패치",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.3",
+              "name": "장애보고",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.4",
+              "name": "대체장비",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.5",
+              "name": "부품교체",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.6",
+              "name": "보고체계",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.7",
+              "name": "현장방문",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.1.8",
+              "name": "네트워크지원",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.2",
+          "name": "Phase 2",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.2.1",
+              "name": "연동점검",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.2",
+              "name": "SW업데이트",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.3",
+              "name": "관리자교육",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.4",
+              "name": "OS설치설정",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.5",
+              "name": "AD계정관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.6",
+              "name": "프린터관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.7",
+              "name": "VPN관리",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.2.8",
+              "name": "바이러스치료",
+              "level": 3
+            }
+          ]
+        },
+        {
+          "id": "WBS-1.3",
+          "name": "Phase 3",
+          "level": 2,
+          "children": [
+            {
+              "id": "WBS-1.3.1",
+              "name": "장애처리시간",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.2",
+              "name": "티켓접수",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.3",
+              "name": "계정비밀번호초",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.4",
+              "name": "보안USB안내",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.5",
+              "name": "월간보안점검",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.6",
+              "name": "진단지원",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.7",
+              "name": "제약-소유권",
+              "level": 3
+            },
+            {
+              "id": "WBS-1.3.8",
+              "name": "제약-SLA",
+              "level": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "depth": 3
+}

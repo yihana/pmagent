@@ -1,0 +1,19 @@
+{
+  "project_id": "E1-deep-0",
+  "generated_at": "2025-11-19T09:36:06.136728",
+  "outputs": {
+    "requirements": "data\\E1-deep-0\\requirements.json",
+    "wbs_draft": "data\\E1-deep-0\\wbs_structure.json",
+    "charter": "data\\E1-deep-0\\E1-deep-0_프로젝트헌장.docx",
+    "tailoring": "data\\E1-deep-0\\E1-deep-0_테일러링.xlsx",
+    "scope_statement": "data\\E1-deep-0\\E1-deep-0_범위기술서.xlsx",
+    "rtm": "data\\E1-deep-0\\E1-deep-0_요구사항추적표.xlsx",
+    "project_plan": "data\\E1-deep-0\\E1-deep-0_사업수행계획서.xlsx"
+  },
+  "stats": {
+    "requirements": 15,
+    "functional": 11,
+    "non_functional": 2,
+    "constraints": 2
+  }
+}
