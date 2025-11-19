@@ -1,9 +1,0 @@
-{
-  "project_name": "20251119_101",
-  "requirements": 15,
-  "wbs_nodes": 1,
-  "options": {
-    "chunk_size": 500,
-    "overlap": 100
-  }
-}

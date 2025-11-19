@@ -1,3 +1,0 @@
-req_id,title,type,priority,wbs_id,test_case,verification_status
-REQ-001,## 2. 기능 요구사항,functional,Medium,,,Pending WBS
-REQ-005,## 3. 비기능 요구사항,functional,Medium,,,Pending WBS
