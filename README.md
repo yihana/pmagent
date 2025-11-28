@@ -90,10 +90,12 @@ python -m venv .venv
 pip install -r requirements.txt
 3. 환경 변수 설정
 server/utils/config.py 또는 .env 등을 사용하여 LLM 및 DB 관련 환경을 설정합니다.
+
 ▶ 백엔드(FastAPI) 실행
 # 프로젝트 루트에서
 .\.venv\Scripts\activate
 uvicorn server.main:app --reload --port 8001
+
 ▶ 프론트엔드(Streamlit) 실행
 # 프로젝트 루트에서
 .\.venv\Scripts\activate
@@ -102,6 +104,7 @@ streamlit run app/main.py --server.port 8501
 •	좌측 메뉴에서:
 o	PM Workflow 
 o	Scope / Schedule / Risk / Dashboard 등을 선택
+
 ▶ 사용법 및 예제
 1. ReWOO Proposal Workflow (추천 데모)
 1) pm_workflow.py 페이지 선택
