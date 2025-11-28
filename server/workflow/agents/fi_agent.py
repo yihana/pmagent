@@ -3,39 +3,39 @@ from server.workflow.state import AgentType
 from typing import Dict, Any
 
 
-class JudgeAgent(Agent):
+class FiAgent(Agent):
 
     def __init__(self, k: int = 2, session_id: str = None):
         super().__init__(
-            system_prompt="당신은 공정하고 논리적인 토론 심판입니다. 양측의 주장을 면밀히 검토하고 객관적으로 평가해주세요.",
-            role=AgentType.JUDGE,
+            system_prompt="당신은 공정하고 논리적인 재무회계 컨설턴트 입니다. 양측의 주장을 면밀히 검토하고 객관적으로 회계기준을 적용하여 검토내용을 정리해주세요.",
+            role=AgentType.FI,
             k=k,
             session_id=session_id,
         )
 
     def _create_prompt(self, state: Dict[str, Any]) -> str:
 
-        debate_summary = self._build_debate_summary(state)
+        review_summary = self._build_review_summary(state)
 
         return f"""
-            다음은 '{state['topic']}'에 대한 찬반 토론입니다. 각 측의 주장을 분석하고 평가해주세요.
+            다음은 '{state['agenda']}'에 대한 재무영역 검토입니다. 각 측의 주장을 분석하고 회계기준으로 정리해주세요.
             
             다음은 이 주제와 관련된 객관적인 정보입니다:
                 {state.get("context", "")}
                 
-            토론 내용:
-            {debate_summary}
+            검토 내용:
+            {review_summary}
             
-            위 토론을 분석하여 다음을 포함하는 심사 평가를 해주세요:
+            위 검토을 분석하여 다음을 포함하는 회계기준을 근거로 정리를 해주세요:
             1. 양측 주장의 핵심 요약
             2. 각 측이 사용한 주요 논리와 증거의 강점과 약점
-            3. 전체 토론의 승자와 그 이유
-            4. 양측 모두에게 개선점 제안
+            3. 전체 검토의 정리
+            4. 회계기준 관점에서 개선점 제안
             
             최대 500자 이내로 작성해주세요.
             """
 
-    def _build_debate_summary(self, state: Dict[str, Any]) -> str:
+    def _build_review_summary(self, state: Dict[str, Any]) -> str:
 
         summary = ""
 

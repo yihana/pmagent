@@ -128,7 +128,7 @@ class ScopeStatementGenerator:
         details.append("3. 외부 Open 추진 및 DT기반 시스템 혁신")
         details.append("  • 외부 Open 지원 (해외 서비스/Infra/Language 등)")
         details.append("  • 신화된 Tech. 본격 활용 (챗봇, 마신러닝분류 등)")
-        details.append("  • Digital Class 구현 및 연계 (토론/실습결과, 학습자 행동 data 등)")
+        details.append("  • Digital Class 구현 및 연계 (재무분석/실습결과, 학습자 행동 data 등)")
         details.append("  • HR/회계시스템 등 연계")
         return "\n".join(details)
     

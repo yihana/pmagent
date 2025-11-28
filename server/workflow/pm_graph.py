@@ -659,7 +659,7 @@ async def _workflow_scope_then_schedule_handler(payload: Dict[str, Any]) -> Dict
         }
 
 
-def create_debate_graph(kind: str = "scope"):
+def create_review_graph(kind: str = "scope"):
     return _App(kind)
 
 

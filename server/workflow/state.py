@@ -3,24 +3,24 @@
 from typing import Dict, List, TypedDict, Optional, Any
 
 class AgentType:
-    PRO = "PRO_AGENT"
-    CON = "CON_AGENT"
-    JUDGE = "JUDGE_AGENT"
+    TR = "TR_AGENT"
+    CO = "CO_AGENT"
+    FI = "FI_AGENT"
 
     @classmethod
     def to_korean(cls, role: str) -> str:
-        if role == cls.PRO:
-            return "찬성"
-        elif role == cls.CON:
-            return "반대"
-        elif role == cls.JUDGE:
-            return "심판"
+        if role == cls.TR:
+            return "자금"
+        elif role == cls.CO:
+            return "경영관리"
+        elif role == cls.FI:
+            return "재무회계"
         else:
             return role
 
 
-class DebateState(TypedDict):
-    topic: str
+class ReviewState(TypedDict):
+    agenda: str
     messages: List[Dict]
     current_round: int
     prev_node: str

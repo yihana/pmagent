@@ -11,14 +11,14 @@ def reset_session_state():
     st.session_state.app_mode = False
     st.session_state.round = 0
     st.session_state.viewing_history = False
-    st.session_state.loaded_debate_id = None
+    st.session_state.loaded_review_id = None
     st.session_state.docs = {}
 
 
-def set_debate_to_state(topic, messages, debate_id, docs):
+def set_review_to_state(agenda, messages, review_id, docs):
     st.session_state.app_mode = True
     st.session_state.messages = messages
     st.session_state.viewing_history = True
-    st.session_state.debate_topic = topic
-    st.session_state.loaded_debate_id = debate_id
+    st.session_state.review_agenda = agenda
+    st.session_state.loaded_review_id = review_id
     st.session_state.docs = docs

@@ -20,19 +20,19 @@ except ImportError:
 
 
 def improve_search_query(
-    topic: str,
-    role: Literal["PRO_AGENT", "CON_AGENT", "JUDGE_AGENT"] = "JUDGE_AGENT",
+    agenda: str,
+    role: Literal["TR_AGENT", "CO_AGENT", "FI_AGENT"] = "FI_AGENT",
 ) -> List[str]:
 
-    template = "'{topic}'에 대해 {perspective} 웹검색에 적합한 3개의 검색어를 제안해주세요. 각 검색어는 25자 이내로 작성하고 콤마로 구분하세요. 검색어만 제공하고 설명은 하지 마세요."
+    template = "'{agenda}'에 대해 {perspective} 웹검색에 적합한 3개의 검색어를 제안해주세요. 각 검색어는 25자 이내로 작성하고 콤마로 구분하세요. 검색어만 제공하고 설명은 하지 마세요."
 
     perspective_map = {
-        "PRO_AGENT": "찬성하는 입장을 뒷받침할 수 있는 사실과 정보를 찾고자 합니다.",
-        "CON_AGENT": "반대하는 입장을 뒷받침할 수 있는 사실과 정보를 찾고자 합니다.",
-        "JUDGE_AGENT": "객관적인 사실과 정보를 찾고자 합니다.",
+        "TR_AGENT": "자금 컨설턴트 입장을 뒷받침할 수 있는 사실과 정보를 찾고자 합니다.",
+        "CO_AGENT": "경영관리 컨설턴트 입장을 뒷받침할 수 있는 사실과 정보를 찾고자 합니다.",
+        "FI_AGENT": "재무회계 컨설턴트 입장의 객관적인 사실과 정보를 찾고자 합니다.",
     }
 
-    prompt = template.format(topic=topic, perspective=perspective_map[role])
+    prompt = template.format(agenda=agenda, perspective=perspective_map[role])
 
     messages = [
         SystemMessage(
@@ -89,7 +89,7 @@ def get_search_content(
                                 metadata={
                                     "source": url,
                                     "section": "content",
-                                    "topic": title,
+                                    "agenda": title,
                                     "query": query,
                                 },
                             )

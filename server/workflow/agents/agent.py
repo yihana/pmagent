@@ -1,6 +1,7 @@
-from server.retrieval.vector_store import search_topic
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from server.retrieval.vector_store import search_agenda
 from server.utils.config import get_llm
-from server.workflow.state import DebateState, AgentType
+from server.workflow.state import ReviewState, AgentType
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, TypedDict
 from langchain_core.messages import BaseMessage
@@ -8,18 +9,10 @@ from langgraph.graph import StateGraph, END
 from langfuse.callback import CallbackHandler
 
 
-try:
-    # ✅ 최신 버전 (LangChain 0.1.x 이상)
-    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-except ImportError:
-    # ✅ 구버전 호환
-    from langchain.schema import HumanMessage, SystemMessage, AIMessage
-
-
 # 에이전트 내부 상태 타입 정의
 class AgentState(TypedDict):
 
-    debate_state: Dict[str, Any]  # 전체 토론 상태
+    review_state: Dict[str, Any]  # 전체 검토 상태
     context: str  # 검색된 컨텍스트
     messages: List[BaseMessage]  # LLM에 전달할 메시지
     response: str  # LLM 응답
@@ -66,22 +59,22 @@ class Agent(ABC):
         if self.k <= 0:
             return {**state, "context": ""}
 
-        debate_state = state["debate_state"]
-        topic = debate_state["topic"]
+        review_state = state["review_state"]
+        agenda = review_state["agenda"]
 
         # 검색 쿼리 생성
-        query = topic
-        if self.role == AgentType.PRO:
-            query += " 찬성 장점 이유 근거"
-        elif self.role == AgentType.CON:
-            query += " 반대 단점 이유 근거"
-        elif self.role == AgentType.JUDGE:
-            query += " 평가 기준 객관적 사실"
+        query = agenda
+        if self.role == AgentType.TR:
+            query += " 자금 검토 이유 근거"
+        elif self.role == AgentType.CO:
+            query += " 경영관리 검토 이유 근거"
+        elif self.role == AgentType.FI:
+            query += " 회계기준으로 정리 기준 객관적 사실"
 
         # RAG 서비스를 통해 검색 실행
-        docs = search_topic(topic, self.role, query, k=self.k)  # noqa: F821
+        docs = search_agenda(agenda, self.role, query, k=self.k)  # noqa: F821
 
-        debate_state["docs"][self.role] = (
+        review_state["docs"][self.role] = (
             [doc.page_content for doc in docs] if docs else []
         )
 
@@ -107,14 +100,14 @@ class Agent(ABC):
     # 프롬프트 메시지 준비
     def _prepare_messages(self, state: AgentState) -> AgentState:
 
-        debate_state = state["debate_state"]
+        review_state = state["review_state"]
         context = state["context"]
 
         # 시스템 프롬프트로 시작
         messages = [SystemMessage(content=self.system_prompt)]
 
         # 기존 대화 기록 추가
-        for message in debate_state["messages"]:
+        for message in review_state["messages"]:
             if message["role"] == "assistant":
                 messages.append(AIMessage(content=message["content"]))
             else:
@@ -123,7 +116,7 @@ class Agent(ABC):
                 )
 
         # 프롬프트 생성 (검색된 컨텍스트 포함)
-        prompt = self._create_prompt({**debate_state, "context": context})
+        prompt = self._create_prompt({**review_state, "context": context})
         messages.append(HumanMessage(content=prompt))
 
         # 상태 업데이트
@@ -144,30 +137,30 @@ class Agent(ABC):
 
     # 상태 업데이트
     def _update_state(self, state: AgentState) -> AgentState:
-        debate_state = state["debate_state"]
+        review_state = state["review_state"]
         response = state["response"]
-        current_round = debate_state["current_round"]
+        current_round = review_state["current_round"]
 
-        # 토론 상태 복사 및 업데이트
-        new_debate_state = debate_state.copy()
+        # 검토 상태 복사 및 업데이트
+        new_review_state = review_state.copy()
 
         # 에이전트 응답 추가
-        new_debate_state["messages"].append(
+        new_review_state["messages"].append(
             {"role": self.role, "content": response, "current_round": current_round}
         )
 
         # 이전 노드 정보 업데이트
-        new_debate_state["prev_node"] = self.role
+        new_review_state["prev_node"] = self.role
 
         # 상태 업데이트
-        return {**state, "debate_state": new_debate_state}
+        return {**state, "review_state": new_review_state}
 
-    # 토론 실행
-    def run(self, state: DebateState) -> DebateState:
+    # 검토 실행
+    def run(self, state: ReviewState) -> ReviewState:
 
         # 초기 에이전트 상태 구성
         agent_state = AgentState(
-            debate_state=state, context="", messages=[], response=""
+            review_state=state, context="", messages=[], response=""
         )
 
         # 내부 그래프 실행
@@ -176,5 +169,5 @@ class Agent(ABC):
             agent_state, config={"callbacks": [langfuse_handler]}
         )
 
-        # 최종 토론 상태 반환
-        return result["debate_state"]
+        # 최종 검토 상태 반환
+        return result["review_state"]

@@ -6,7 +6,8 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from server.workflow.state import AgentType, DebateState
+from server.workflow.state import AgentType, ReviewState
+
 import uvicorn
 from fastapi import FastAPI
 

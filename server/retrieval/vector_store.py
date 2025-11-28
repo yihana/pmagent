@@ -5,12 +5,12 @@ from server.retrieval.search_service import get_search_content, improve_search_q
 from server.utils.config import get_embeddings
 
 
-def get_topic_vector_store(
-    topic: str, role: str, language: str = "ko"
+def get_agenda_vector_store(
+    agenda: str, role: str, language: str = "ko"
 ) -> Optional[FAISS]:
 
     # 검색어 개선
-    improved_queries = improve_search_query(topic, role)
+    improved_queries = improve_search_query(agenda, role)
     # 개선된 검색어로 검색 콘텐츠 가져오기
     documents = get_search_content(improved_queries, language)
     if not documents:
@@ -22,9 +22,9 @@ def get_topic_vector_store(
         return None
 
 
-def search_topic(topic: str, role: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
+def search_agenda(agenda: str, role: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
     # 문서를 검색해서 벡터 스토어 생성
-    vector_store = get_topic_vector_store(topic, role)
+    vector_store = get_agenda_vector_store(agenda, role)
     if not vector_store:
         return []
     try:
